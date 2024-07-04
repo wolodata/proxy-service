@@ -55,6 +55,11 @@ errors:
 build:
 	mkdir -p bin/ && go build -ldflags "-X main.Version=$(VERSION)" -o ./bin/ ./...
 
+.PHONY: build-linux-x86
+# build linux x86
+build-linux-x86:
+	mkdir -p bin/linux/x86 && GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=$(VERSION)" -o ./bin/proxy-service-linux-x86 ...
+
 .PHONY: generate
 # generate
 generate:
