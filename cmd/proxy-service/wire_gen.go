@@ -24,8 +24,7 @@ import (
 func wireApp(confServer *conf.Server, data *conf.Data, logger log.Logger) (*kratos.App, func(), error) {
 	openAIService := service.NewOpenAIService()
 	grpcServer := server.NewGRPCServer(confServer, openAIService, logger)
-	httpServer := server.NewHTTPServer(confServer, openAIService, logger)
-	app := newApp(logger, grpcServer, httpServer)
+	app := newApp(logger, grpcServer)
 	return app, func() {
 	}, nil
 }
