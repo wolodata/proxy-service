@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package proxy.v1;
+import "errors/errors.proto";
+
+option go_package = "proxy-service/api/proxy/v1;v1";
+
+enum ErrorReason {
+  // 设置缺省错误码
+  option (errors.default_code) = 500;
+
+  // 为某个枚举单独设置错误码
+  INVALID_ROLE = 0 [(errors.code) = 400];
+
+  EMPTY_CONTENT = 1 [(errors.code) = 400];
+
+  NO_CHOICE = 2 [(errors.code) = 503];
+
+  OPENAI_ERROR = 3 [(errors.code) = 503];
+}
+
+service OpenAI {
+  rpc ChatCompletion(ChatCompletionRequest) returns (ChatCompletionResponse) {}
+  rpc StreamChatCompletion(StreamChatCompletionRequest) returns (stream StreamChatCompletionResponse) {}
+}
+
+enum ChatCompletionMessageRole {
+  CHAT_COMPLETION_MESSAGE_ROLE_UNSPECIFIED = 0;
+  CHAT_COMPLETION_MESSAGE_ROLE_SYSTEM = 1;
+  CHAT_COMPLETION_MESSAGE_ROLE_USER = 2;
+  CHAT_COMPLETION_MESSAGE_ROLE_ASSISTANT = 3;
+}
+
+message ChatCompletionMessage {
+  ChatCompletionMessageRole role = 1;
+  string content = 2;
+}
+
+message ChatCompletionRequest {
+  string url = 1;
+  string model = 2;
+  string token = 3;
+  float temperature = 4;
+  float top_p = 5;
+  repeated ChatCompletionMessage messages = 6;
+}
+
+message ChatCompletionResponse {
+  string content = 1;
+}
+
+message StreamChatCompletionRequest {
+  string url = 1;
+  string model = 2;
+  string token = 3;
+  float temperature = 4;
+  float top_p = 5;
+  repeated ChatCompletionMessage messages = 6;
+}
+
+message StreamChatCompletionResponse {
+  string chunk = 1;
+}
