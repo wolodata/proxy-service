@@ -9,7 +9,7 @@ import (
 
 	openai "github.com/sashabaranov/go-openai"
 
-	pb "proxy-service/api/proxy/v1"
+	pb "github.com/wolodata/proxy-service/api/proxy/v1"
 )
 
 type OpenAIService struct {

@@ -1,9 +1,9 @@
 package server
 
 import (
-	v1 "proxy-service/api/proxy/v1"
-	"proxy-service/internal/conf"
-	"proxy-service/internal/service"
+	v1 "github.com/wolodata/proxy-service/api/proxy/v1"
+	"github.com/wolodata/proxy-service/internal/conf"
+	"github.com/wolodata/proxy-service/internal/service"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware/recovery"

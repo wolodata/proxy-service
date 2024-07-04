@@ -4,7 +4,7 @@ import (
 	"flag"
 	"os"
 
-	"proxy-service/internal/conf"
+	"github.com/wolodata/proxy-service/internal/conf"
 
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/config"

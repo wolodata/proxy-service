@@ -9,9 +9,9 @@ package main
 import (
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/log"
-	"proxy-service/internal/conf"
-	"proxy-service/internal/server"
-	"proxy-service/internal/service"
+	"github.com/wolodata/proxy-service/internal/conf"
+	"github.com/wolodata/proxy-service/internal/server"
+	"github.com/wolodata/proxy-service/internal/service"
 )
 
 import (

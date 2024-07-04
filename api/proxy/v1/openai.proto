@@ -3,7 +3,7 @@ syntax = "proto3";
 package proxy.v1;
 import "errors/errors.proto";
 
-option go_package = "proxy-service/api/proxy/v1;v1";
+option go_package = "github.com/wolodata/proxy-service/api/proxy/v1;v1";
 
 enum ErrorReason {
   // 设置缺省错误码
