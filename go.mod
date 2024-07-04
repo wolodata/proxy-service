@@ -1,4 +1,4 @@
-module proxy-service
+module github.com/wolodata/proxy-service
 
 go 1.22
 
