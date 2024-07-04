@@ -7,7 +7,7 @@ After=network-online.target data.mount
 
 WorkingDirectory=/opt/proxy-service
 
-ExecStart=/opt/proxy-service/proxy-service-linux-x86
+ExecStart=/opt/proxy-service/proxy-service-linux-x86 -conf /opt/proxy-service/config.yaml
 
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
