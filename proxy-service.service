@@ -1,0 +1,24 @@
+[Unit]
+Description=proxy-service
+Wants=network-online.target data.mount
+After=network-online.target data.mount
+
+[Service]
+
+WorkingDirectory=/opt/proxy-service
+
+ExecStart=/opt/proxy-service/proxy-service-linux-x86
+
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=5
+LimitNOFILE=infinity
+LimitNPROC=infinity
+LimitCORE=infinity
+Delegate=yes
+KillMode=process
+CPUQuota=100%
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target
