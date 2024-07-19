@@ -6,7 +6,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-kratos/kratos/v2 v2.7.3
 	github.com/google/wire v0.6.0
-	github.com/sashabaranov/go-openai v1.26.2
+	github.com/sashabaranov/go-openai v1.26.3
 	go.uber.org/automaxprocs v1.5.3
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2
