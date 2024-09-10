@@ -8,7 +8,7 @@ require (
 	github.com/google/wire v0.6.0
 	github.com/sashabaranov/go-openai v1.29.1
 	go.uber.org/automaxprocs v1.5.3
-	google.golang.org/grpc v1.66.0
+	google.golang.org/grpc v1.66.1
 	google.golang.org/protobuf v1.34.2
 )
 
