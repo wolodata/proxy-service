@@ -11,52 +11,44 @@ import (
 // is compatible with the kratos package it is being compiled against.
 const _ = errors.SupportPackageIsVersion1
 
-// 为某个枚举单独设置错误码
-func IsInvalidRole(err error) bool {
+// 客户端参数错误（包含角色、内容、参数、请求格式等所有输入验证错误）
+func IsInvalidArgument(err error) bool {
 	if err == nil {
 		return false
 	}
 	e := errors.FromError(err)
-	return e.Reason == ErrorReason_INVALID_ROLE.String() && e.Code == 400
+	return e.Reason == ErrorReason_INVALID_ARGUMENT.String() && e.Code == 400
 }
 
-// 为某个枚举单独设置错误码
-func ErrorInvalidRole(format string, args ...interface{}) *errors.Error {
-	return errors.New(400, ErrorReason_INVALID_ROLE.String(), fmt.Sprintf(format, args...))
+// 客户端参数错误（包含角色、内容、参数、请求格式等所有输入验证错误）
+func ErrorInvalidArgument(format string, args ...interface{}) *errors.Error {
+	return errors.New(400, ErrorReason_INVALID_ARGUMENT.String(), fmt.Sprintf(format, args...))
 }
 
-func IsEmptyContent(err error) bool {
-	if err == nil {
-		return false
-	}
-	e := errors.FromError(err)
-	return e.Reason == ErrorReason_EMPTY_CONTENT.String() && e.Code == 400
-}
-
-func ErrorEmptyContent(format string, args ...interface{}) *errors.Error {
-	return errors.New(400, ErrorReason_EMPTY_CONTENT.String(), fmt.Sprintf(format, args...))
-}
-
+// 响应中没有可用的选项
 func IsNoChoice(err error) bool {
 	if err == nil {
 		return false
 	}
 	e := errors.FromError(err)
-	return e.Reason == ErrorReason_NO_CHOICE.String() && e.Code == 503
+	return e.Reason == ErrorReason_NO_CHOICE.String() && e.Code == 500
 }
 
+// 响应中没有可用的选项
 func ErrorNoChoice(format string, args ...interface{}) *errors.Error {
-	return errors.New(503, ErrorReason_NO_CHOICE.String(), fmt.Sprintf(format, args...))
+	return errors.New(500, ErrorReason_NO_CHOICE.String(), fmt.Sprintf(format, args...))
 }
 
-func IsOpenaiError(err error) bool {
+// 上游 API 服务错误（如 OpenAI API 调用失败）
+func IsUpstreamApiError(err error) bool {
 	if err == nil {
 		return false
 	}
 	e := errors.FromError(err)
-	return e.Reason == ErrorReason_OPENAI_ERROR.String() && e.Code == 503
+	return e.Reason == ErrorReason_UPSTREAM_API_ERROR.String() && e.Code == 502
 }
 
-func ErrorOpenaiError(format string, args ...interface{}) *errors.Error {
-	return errors.New(503, ErrorReason_OPENAI_ERROR.String(), fmt.Sprintf(format, args...))
+// 上游 API 服务错误（如 OpenAI API 调用失败）
+func ErrorUpstreamApiError(format string, args ...interface{}) *errors.Error {
+	return errors.New(502, ErrorReason_UPSTREAM_API_ERROR.String(), fmt.Sprintf(format, args...))
 }

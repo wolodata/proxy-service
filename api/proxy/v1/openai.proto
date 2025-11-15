@@ -9,14 +9,14 @@ enum ErrorReason {
   // 设置缺省错误码
   option (errors.default_code) = 500;
 
-  // 为某个枚举单独设置错误码
-  INVALID_ROLE = 0 [(errors.code) = 400];
+  // 客户端参数错误（包含角色、内容、参数、请求格式等所有输入验证错误）
+  INVALID_ARGUMENT = 0 [(errors.code) = 400];
 
-  EMPTY_CONTENT = 1 [(errors.code) = 400];
+  // 响应中没有可用的选项
+  NO_CHOICE = 1 [(errors.code) = 500];
 
-  NO_CHOICE = 2 [(errors.code) = 503];
-
-  OPENAI_ERROR = 3 [(errors.code) = 503];
+  // 上游 API 服务错误（如 OpenAI API 调用失败）
+  UPSTREAM_API_ERROR = 2 [(errors.code) = 502];
 }
 
 service OpenAI {

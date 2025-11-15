@@ -22,7 +22,7 @@ import (
 
 // wireApp init kratos application.
 func wireApp(confServer *conf.Server, data *conf.Data, logger log.Logger) (*kratos.App, func(), error) {
-	openAIService := service.NewOpenAIService()
+	openAIService := service.NewOpenAIService(logger)
 	grpcServer := server.NewGRPCServer(confServer, openAIService, logger)
 	app := newApp(logger, grpcServer)
 	return app, func() {
