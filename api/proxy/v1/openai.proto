@@ -20,44 +20,33 @@ enum ErrorReason {
 }
 
 service OpenAI {
-  rpc ChatCompletion(ChatCompletionRequest) returns (ChatCompletionResponse) {}
-  rpc StreamChatCompletion(StreamChatCompletionRequest) returns (stream StreamChatCompletionResponse) {}
+  rpc StreamResponsesCompletion(StreamResponsesRequest) returns (stream StreamResponsesResponse) {}
 }
 
-enum ChatCompletionMessageRole {
+enum MessageRole {
   CHAT_COMPLETION_MESSAGE_ROLE_UNSPECIFIED = 0;
   CHAT_COMPLETION_MESSAGE_ROLE_SYSTEM = 1;
   CHAT_COMPLETION_MESSAGE_ROLE_USER = 2;
   CHAT_COMPLETION_MESSAGE_ROLE_ASSISTANT = 3;
 }
 
-message ChatCompletionMessage {
-  ChatCompletionMessageRole role = 1;
+message Message {
+  MessageRole role = 1;
   string content = 2;
 }
 
-message ChatCompletionRequest {
+message StreamResponsesRequest {
   string url = 1;
   string model = 2;
   string token = 3;
   float temperature = 4;
   float top_p = 5;
-  repeated ChatCompletionMessage messages = 6;
+  repeated Message messages = 6;
 }
 
-message ChatCompletionResponse {
-  string content = 1;
-}
-
-message StreamChatCompletionRequest {
-  string url = 1;
-  string model = 2;
-  string token = 3;
-  float temperature = 4;
-  float top_p = 5;
-  repeated ChatCompletionMessage messages = 6;
-}
-
-message StreamChatCompletionResponse {
-  string chunk = 1;
+message StreamResponsesResponse {
+  oneof content {
+    string reasoning_chunk = 1;
+    string message_chunk = 2;
+  }
 }

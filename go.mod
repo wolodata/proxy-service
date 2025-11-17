@@ -3,7 +3,6 @@ module github.com/wolodata/proxy-service
 go 1.25
 
 require (
-	github.com/davecgh/go-spew v1.1.1
 	github.com/go-kratos/kratos/v2 v2.9.1
 	github.com/google/wire v0.7.0
 	github.com/openai/openai-go/v3 v3.8.1
