@@ -36,12 +36,11 @@ message Message {
 }
 
 message StreamChatCompletionsRequest {
-  string url = 1;
-  string model = 2;
-  string token = 3;
-  optional double temperature = 4;
-  optional double top_p = 5;
-  repeated Message messages = 6;
+  string model = 1;
+  string token = 2;
+  optional double temperature = 3;
+  optional double top_p = 4;
+  repeated Message messages = 5;
 }
 
 message StreamChatCompletionsResponse {

@@ -180,12 +180,11 @@ func (x *Message) GetContent() string {
 
 type StreamChatCompletionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
-	Model         string                 `protobuf:"bytes,2,opt,name=model,proto3" json:"model,omitempty"`
-	Token         string                 `protobuf:"bytes,3,opt,name=token,proto3" json:"token,omitempty"`
-	Temperature   *float64               `protobuf:"fixed64,4,opt,name=temperature,proto3,oneof" json:"temperature,omitempty"`
-	TopP          *float64               `protobuf:"fixed64,5,opt,name=top_p,json=topP,proto3,oneof" json:"top_p,omitempty"`
-	Messages      []*Message             `protobuf:"bytes,6,rep,name=messages,proto3" json:"messages,omitempty"`
+	Model         string                 `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	Temperature   *float64               `protobuf:"fixed64,3,opt,name=temperature,proto3,oneof" json:"temperature,omitempty"`
+	TopP          *float64               `protobuf:"fixed64,4,opt,name=top_p,json=topP,proto3,oneof" json:"top_p,omitempty"`
+	Messages      []*Message             `protobuf:"bytes,5,rep,name=messages,proto3" json:"messages,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -218,13 +217,6 @@ func (x *StreamChatCompletionsRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use StreamChatCompletionsRequest.ProtoReflect.Descriptor instead.
 func (*StreamChatCompletionsRequest) Descriptor() ([]byte, []int) {
 	return file_api_proxy_v1_perplexity_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *StreamChatCompletionsRequest) GetUrl() string {
-	if x != nil {
-		return x.Url
-	}
-	return ""
 }
 
 func (x *StreamChatCompletionsRequest) GetModel() string {
@@ -351,14 +343,13 @@ const file_api_proxy_v1_perplexity_proto_rawDesc = "" +
 	"\x1dapi/proxy/v1/perplexity.proto\x12\bproxy.v1\x1a\x13errors/errors.proto\"N\n" +
 	"\aMessage\x12)\n" +
 	"\x04role\x18\x01 \x01(\x0e2\x15.proxy.v1.MessageRoleR\x04role\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\"\xe6\x01\n" +
-	"\x1cStreamChatCompletionsRequest\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url\x12\x14\n" +
-	"\x05model\x18\x02 \x01(\tR\x05model\x12\x14\n" +
-	"\x05token\x18\x03 \x01(\tR\x05token\x12%\n" +
-	"\vtemperature\x18\x04 \x01(\x01H\x00R\vtemperature\x88\x01\x01\x12\x18\n" +
-	"\x05top_p\x18\x05 \x01(\x01H\x01R\x04topP\x88\x01\x01\x12-\n" +
-	"\bmessages\x18\x06 \x03(\v2\x11.proxy.v1.MessageR\bmessagesB\x0e\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\"\xd4\x01\n" +
+	"\x1cStreamChatCompletionsRequest\x12\x14\n" +
+	"\x05model\x18\x01 \x01(\tR\x05model\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\x12%\n" +
+	"\vtemperature\x18\x03 \x01(\x01H\x00R\vtemperature\x88\x01\x01\x12\x18\n" +
+	"\x05top_p\x18\x04 \x01(\x01H\x01R\x04topP\x88\x01\x01\x12-\n" +
+	"\bmessages\x18\x05 \x03(\v2\x11.proxy.v1.MessageR\bmessagesB\x0e\n" +
 	"\f_temperatureB\b\n" +
 	"\x06_top_p\"|\n" +
 	"\x1dStreamChatCompletionsResponse\x12)\n" +
