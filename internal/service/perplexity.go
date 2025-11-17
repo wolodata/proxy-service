@@ -110,25 +110,20 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 
 	// 5. 设置流式传输
 	var wg sync.WaitGroup
-	chResponses := make(chan perplexity.CompletionResponse, 5)
+	chResponses := make(chan perplexity.CompletionResponse)
 	streamCtx := conn.Context()
 
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
 		if err := client.SendSSEHTTPRequestWithContext(streamCtx, &wg, completionRequest, chResponses); err != nil {
 			s.log.Errorw("msg", "SSE 请求失败", "error", err)
 		}
+		// 注意：channel 由 SendSSEHTTPRequestWithContext 负责关闭
+		// 且 wg.Done() 也由 SendSSEHTTPRequestWithContext 负责调用
+		s.log.Debugw("msg", "SSE 请求已完成")
 	}()
 
 	s.log.Infow("msg", "SSE 请求已发起")
-
-	// 等待 goroutine 完成后关闭通道
-	go func() {
-		wg.Wait()
-		close(chResponses)
-		s.log.Debugw("msg", "响应通道已关闭")
-	}()
 
 	// 6. 使用状态机处理流式响应
 	var lastContent string
