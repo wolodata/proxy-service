@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.10
 // 	protoc        v6.33.1
-// source: proxy/v1/openai.proto
+// source: api/proxy/v1/perplexity.proto
 
 package v1
 
@@ -58,11 +58,11 @@ func (x ErrorReason) String() string {
 }
 
 func (ErrorReason) Descriptor() protoreflect.EnumDescriptor {
-	return file_proxy_v1_openai_proto_enumTypes[0].Descriptor()
+	return file_api_proxy_v1_perplexity_proto_enumTypes[0].Descriptor()
 }
 
 func (ErrorReason) Type() protoreflect.EnumType {
-	return &file_proxy_v1_openai_proto_enumTypes[0]
+	return &file_api_proxy_v1_perplexity_proto_enumTypes[0]
 }
 
 func (x ErrorReason) Number() protoreflect.EnumNumber {
@@ -71,7 +71,7 @@ func (x ErrorReason) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ErrorReason.Descriptor instead.
 func (ErrorReason) EnumDescriptor() ([]byte, []int) {
-	return file_proxy_v1_openai_proto_rawDescGZIP(), []int{0}
+	return file_api_proxy_v1_perplexity_proto_rawDescGZIP(), []int{0}
 }
 
 type MessageRole int32
@@ -110,11 +110,11 @@ func (x MessageRole) String() string {
 }
 
 func (MessageRole) Descriptor() protoreflect.EnumDescriptor {
-	return file_proxy_v1_openai_proto_enumTypes[1].Descriptor()
+	return file_api_proxy_v1_perplexity_proto_enumTypes[1].Descriptor()
 }
 
 func (MessageRole) Type() protoreflect.EnumType {
-	return &file_proxy_v1_openai_proto_enumTypes[1]
+	return &file_api_proxy_v1_perplexity_proto_enumTypes[1]
 }
 
 func (x MessageRole) Number() protoreflect.EnumNumber {
@@ -123,7 +123,7 @@ func (x MessageRole) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MessageRole.Descriptor instead.
 func (MessageRole) EnumDescriptor() ([]byte, []int) {
-	return file_proxy_v1_openai_proto_rawDescGZIP(), []int{1}
+	return file_api_proxy_v1_perplexity_proto_rawDescGZIP(), []int{1}
 }
 
 type Message struct {
@@ -136,7 +136,7 @@ type Message struct {
 
 func (x *Message) Reset() {
 	*x = Message{}
-	mi := &file_proxy_v1_openai_proto_msgTypes[0]
+	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -148,7 +148,7 @@ func (x *Message) String() string {
 func (*Message) ProtoMessage() {}
 
 func (x *Message) ProtoReflect() protoreflect.Message {
-	mi := &file_proxy_v1_openai_proto_msgTypes[0]
+	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -161,7 +161,7 @@ func (x *Message) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Message.ProtoReflect.Descriptor instead.
 func (*Message) Descriptor() ([]byte, []int) {
-	return file_proxy_v1_openai_proto_rawDescGZIP(), []int{0}
+	return file_api_proxy_v1_perplexity_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Message) GetRole() MessageRole {
@@ -178,33 +178,33 @@ func (x *Message) GetContent() string {
 	return ""
 }
 
-type StreamResponsesRequest struct {
+type StreamChatCompletionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
 	Model         string                 `protobuf:"bytes,2,opt,name=model,proto3" json:"model,omitempty"`
 	Token         string                 `protobuf:"bytes,3,opt,name=token,proto3" json:"token,omitempty"`
-	Temperature   float64                `protobuf:"fixed64,4,opt,name=temperature,proto3" json:"temperature,omitempty"`
-	TopP          float64                `protobuf:"fixed64,5,opt,name=top_p,json=topP,proto3" json:"top_p,omitempty"`
+	Temperature   *float64               `protobuf:"fixed64,4,opt,name=temperature,proto3,oneof" json:"temperature,omitempty"`
+	TopP          *float64               `protobuf:"fixed64,5,opt,name=top_p,json=topP,proto3,oneof" json:"top_p,omitempty"`
 	Messages      []*Message             `protobuf:"bytes,6,rep,name=messages,proto3" json:"messages,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StreamResponsesRequest) Reset() {
-	*x = StreamResponsesRequest{}
-	mi := &file_proxy_v1_openai_proto_msgTypes[1]
+func (x *StreamChatCompletionsRequest) Reset() {
+	*x = StreamChatCompletionsRequest{}
+	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StreamResponsesRequest) String() string {
+func (x *StreamChatCompletionsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StreamResponsesRequest) ProtoMessage() {}
+func (*StreamChatCompletionsRequest) ProtoMessage() {}
 
-func (x *StreamResponsesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proxy_v1_openai_proto_msgTypes[1]
+func (x *StreamChatCompletionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -215,79 +215,79 @@ func (x *StreamResponsesRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StreamResponsesRequest.ProtoReflect.Descriptor instead.
-func (*StreamResponsesRequest) Descriptor() ([]byte, []int) {
-	return file_proxy_v1_openai_proto_rawDescGZIP(), []int{1}
+// Deprecated: Use StreamChatCompletionsRequest.ProtoReflect.Descriptor instead.
+func (*StreamChatCompletionsRequest) Descriptor() ([]byte, []int) {
+	return file_api_proxy_v1_perplexity_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *StreamResponsesRequest) GetUrl() string {
+func (x *StreamChatCompletionsRequest) GetUrl() string {
 	if x != nil {
 		return x.Url
 	}
 	return ""
 }
 
-func (x *StreamResponsesRequest) GetModel() string {
+func (x *StreamChatCompletionsRequest) GetModel() string {
 	if x != nil {
 		return x.Model
 	}
 	return ""
 }
 
-func (x *StreamResponsesRequest) GetToken() string {
+func (x *StreamChatCompletionsRequest) GetToken() string {
 	if x != nil {
 		return x.Token
 	}
 	return ""
 }
 
-func (x *StreamResponsesRequest) GetTemperature() float64 {
-	if x != nil {
-		return x.Temperature
+func (x *StreamChatCompletionsRequest) GetTemperature() float64 {
+	if x != nil && x.Temperature != nil {
+		return *x.Temperature
 	}
 	return 0
 }
 
-func (x *StreamResponsesRequest) GetTopP() float64 {
-	if x != nil {
-		return x.TopP
+func (x *StreamChatCompletionsRequest) GetTopP() float64 {
+	if x != nil && x.TopP != nil {
+		return *x.TopP
 	}
 	return 0
 }
 
-func (x *StreamResponsesRequest) GetMessages() []*Message {
+func (x *StreamChatCompletionsRequest) GetMessages() []*Message {
 	if x != nil {
 		return x.Messages
 	}
 	return nil
 }
 
-type StreamResponsesResponse struct {
+type StreamChatCompletionsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Content:
 	//
-	//	*StreamResponsesResponse_ReasoningChunk
-	//	*StreamResponsesResponse_MessageChunk
-	Content       isStreamResponsesResponse_Content `protobuf_oneof:"content"`
+	//	*StreamChatCompletionsResponse_ReasoningChunk
+	//	*StreamChatCompletionsResponse_MessageChunk
+	Content       isStreamChatCompletionsResponse_Content `protobuf_oneof:"content"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StreamResponsesResponse) Reset() {
-	*x = StreamResponsesResponse{}
-	mi := &file_proxy_v1_openai_proto_msgTypes[2]
+func (x *StreamChatCompletionsResponse) Reset() {
+	*x = StreamChatCompletionsResponse{}
+	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StreamResponsesResponse) String() string {
+func (x *StreamChatCompletionsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StreamResponsesResponse) ProtoMessage() {}
+func (*StreamChatCompletionsResponse) ProtoMessage() {}
 
-func (x *StreamResponsesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proxy_v1_openai_proto_msgTypes[2]
+func (x *StreamChatCompletionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -298,68 +298,70 @@ func (x *StreamResponsesResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StreamResponsesResponse.ProtoReflect.Descriptor instead.
-func (*StreamResponsesResponse) Descriptor() ([]byte, []int) {
-	return file_proxy_v1_openai_proto_rawDescGZIP(), []int{2}
+// Deprecated: Use StreamChatCompletionsResponse.ProtoReflect.Descriptor instead.
+func (*StreamChatCompletionsResponse) Descriptor() ([]byte, []int) {
+	return file_api_proxy_v1_perplexity_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *StreamResponsesResponse) GetContent() isStreamResponsesResponse_Content {
+func (x *StreamChatCompletionsResponse) GetContent() isStreamChatCompletionsResponse_Content {
 	if x != nil {
 		return x.Content
 	}
 	return nil
 }
 
-func (x *StreamResponsesResponse) GetReasoningChunk() string {
+func (x *StreamChatCompletionsResponse) GetReasoningChunk() string {
 	if x != nil {
-		if x, ok := x.Content.(*StreamResponsesResponse_ReasoningChunk); ok {
+		if x, ok := x.Content.(*StreamChatCompletionsResponse_ReasoningChunk); ok {
 			return x.ReasoningChunk
 		}
 	}
 	return ""
 }
 
-func (x *StreamResponsesResponse) GetMessageChunk() string {
+func (x *StreamChatCompletionsResponse) GetMessageChunk() string {
 	if x != nil {
-		if x, ok := x.Content.(*StreamResponsesResponse_MessageChunk); ok {
+		if x, ok := x.Content.(*StreamChatCompletionsResponse_MessageChunk); ok {
 			return x.MessageChunk
 		}
 	}
 	return ""
 }
 
-type isStreamResponsesResponse_Content interface {
-	isStreamResponsesResponse_Content()
+type isStreamChatCompletionsResponse_Content interface {
+	isStreamChatCompletionsResponse_Content()
 }
 
-type StreamResponsesResponse_ReasoningChunk struct {
+type StreamChatCompletionsResponse_ReasoningChunk struct {
 	ReasoningChunk string `protobuf:"bytes,1,opt,name=reasoning_chunk,json=reasoningChunk,proto3,oneof"`
 }
 
-type StreamResponsesResponse_MessageChunk struct {
+type StreamChatCompletionsResponse_MessageChunk struct {
 	MessageChunk string `protobuf:"bytes,2,opt,name=message_chunk,json=messageChunk,proto3,oneof"`
 }
 
-func (*StreamResponsesResponse_ReasoningChunk) isStreamResponsesResponse_Content() {}
+func (*StreamChatCompletionsResponse_ReasoningChunk) isStreamChatCompletionsResponse_Content() {}
 
-func (*StreamResponsesResponse_MessageChunk) isStreamResponsesResponse_Content() {}
+func (*StreamChatCompletionsResponse_MessageChunk) isStreamChatCompletionsResponse_Content() {}
 
-var File_proxy_v1_openai_proto protoreflect.FileDescriptor
+var File_api_proxy_v1_perplexity_proto protoreflect.FileDescriptor
 
-const file_proxy_v1_openai_proto_rawDesc = "" +
+const file_api_proxy_v1_perplexity_proto_rawDesc = "" +
 	"\n" +
-	"\x15proxy/v1/openai.proto\x12\bproxy.v1\x1a\x13errors/errors.proto\"N\n" +
+	"\x1dapi/proxy/v1/perplexity.proto\x12\bproxy.v1\x1a\x13errors/errors.proto\"N\n" +
 	"\aMessage\x12)\n" +
 	"\x04role\x18\x01 \x01(\x0e2\x15.proxy.v1.MessageRoleR\x04role\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\"\xbc\x01\n" +
-	"\x16StreamResponsesRequest\x12\x10\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\"\xe6\x01\n" +
+	"\x1cStreamChatCompletionsRequest\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12\x14\n" +
 	"\x05model\x18\x02 \x01(\tR\x05model\x12\x14\n" +
-	"\x05token\x18\x03 \x01(\tR\x05token\x12 \n" +
-	"\vtemperature\x18\x04 \x01(\x01R\vtemperature\x12\x13\n" +
-	"\x05top_p\x18\x05 \x01(\x01R\x04topP\x12-\n" +
-	"\bmessages\x18\x06 \x03(\v2\x11.proxy.v1.MessageR\bmessages\"v\n" +
-	"\x17StreamResponsesResponse\x12)\n" +
+	"\x05token\x18\x03 \x01(\tR\x05token\x12%\n" +
+	"\vtemperature\x18\x04 \x01(\x01H\x00R\vtemperature\x88\x01\x01\x12\x18\n" +
+	"\x05top_p\x18\x05 \x01(\x01H\x01R\x04topP\x88\x01\x01\x12-\n" +
+	"\bmessages\x18\x06 \x03(\v2\x11.proxy.v1.MessageR\bmessagesB\x0e\n" +
+	"\f_temperatureB\b\n" +
+	"\x06_top_p\"|\n" +
+	"\x1dStreamChatCompletionsResponse\x12)\n" +
 	"\x0freasoning_chunk\x18\x01 \x01(\tH\x00R\x0ereasoningChunk\x12%\n" +
 	"\rmessage_chunk\x18\x02 \x01(\tH\x00R\fmessageChunkB\t\n" +
 	"\acontent*b\n" +
@@ -371,36 +373,37 @@ const file_proxy_v1_openai_proto_rawDesc = "" +
 	"(CHAT_COMPLETION_MESSAGE_ROLE_UNSPECIFIED\x10\x00\x12'\n" +
 	"#CHAT_COMPLETION_MESSAGE_ROLE_SYSTEM\x10\x01\x12%\n" +
 	"!CHAT_COMPLETION_MESSAGE_ROLE_USER\x10\x02\x12*\n" +
-	"&CHAT_COMPLETION_MESSAGE_ROLE_ASSISTANT\x10\x032n\n" +
-	"\x06OpenAI\x12d\n" +
-	"\x19StreamResponsesCompletion\x12 .proxy.v1.StreamResponsesRequest\x1a!.proxy.v1.StreamResponsesResponse\"\x000\x01B3Z1github.com/wolodata/proxy-service/api/proxy/v1;v1b\x06proto3"
+	"&CHAT_COMPLETION_MESSAGE_ROLE_ASSISTANT\x10\x032z\n" +
+	"\n" +
+	"Perplexity\x12l\n" +
+	"\x15StreamChatCompletions\x12&.proxy.v1.StreamChatCompletionsRequest\x1a'.proxy.v1.StreamChatCompletionsResponse\"\x000\x01B3Z1github.com/wolodata/proxy-service/api/proxy/v1;v1b\x06proto3"
 
 var (
-	file_proxy_v1_openai_proto_rawDescOnce sync.Once
-	file_proxy_v1_openai_proto_rawDescData []byte
+	file_api_proxy_v1_perplexity_proto_rawDescOnce sync.Once
+	file_api_proxy_v1_perplexity_proto_rawDescData []byte
 )
 
-func file_proxy_v1_openai_proto_rawDescGZIP() []byte {
-	file_proxy_v1_openai_proto_rawDescOnce.Do(func() {
-		file_proxy_v1_openai_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proxy_v1_openai_proto_rawDesc), len(file_proxy_v1_openai_proto_rawDesc)))
+func file_api_proxy_v1_perplexity_proto_rawDescGZIP() []byte {
+	file_api_proxy_v1_perplexity_proto_rawDescOnce.Do(func() {
+		file_api_proxy_v1_perplexity_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_api_proxy_v1_perplexity_proto_rawDesc), len(file_api_proxy_v1_perplexity_proto_rawDesc)))
 	})
-	return file_proxy_v1_openai_proto_rawDescData
+	return file_api_proxy_v1_perplexity_proto_rawDescData
 }
 
-var file_proxy_v1_openai_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proxy_v1_openai_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_proxy_v1_openai_proto_goTypes = []any{
-	(ErrorReason)(0),                // 0: proxy.v1.ErrorReason
-	(MessageRole)(0),                // 1: proxy.v1.MessageRole
-	(*Message)(nil),                 // 2: proxy.v1.Message
-	(*StreamResponsesRequest)(nil),  // 3: proxy.v1.StreamResponsesRequest
-	(*StreamResponsesResponse)(nil), // 4: proxy.v1.StreamResponsesResponse
+var file_api_proxy_v1_perplexity_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_api_proxy_v1_perplexity_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_api_proxy_v1_perplexity_proto_goTypes = []any{
+	(ErrorReason)(0),                      // 0: proxy.v1.ErrorReason
+	(MessageRole)(0),                      // 1: proxy.v1.MessageRole
+	(*Message)(nil),                       // 2: proxy.v1.Message
+	(*StreamChatCompletionsRequest)(nil),  // 3: proxy.v1.StreamChatCompletionsRequest
+	(*StreamChatCompletionsResponse)(nil), // 4: proxy.v1.StreamChatCompletionsResponse
 }
-var file_proxy_v1_openai_proto_depIdxs = []int32{
+var file_api_proxy_v1_perplexity_proto_depIdxs = []int32{
 	1, // 0: proxy.v1.Message.role:type_name -> proxy.v1.MessageRole
-	2, // 1: proxy.v1.StreamResponsesRequest.messages:type_name -> proxy.v1.Message
-	3, // 2: proxy.v1.OpenAI.StreamResponsesCompletion:input_type -> proxy.v1.StreamResponsesRequest
-	4, // 3: proxy.v1.OpenAI.StreamResponsesCompletion:output_type -> proxy.v1.StreamResponsesResponse
+	2, // 1: proxy.v1.StreamChatCompletionsRequest.messages:type_name -> proxy.v1.Message
+	3, // 2: proxy.v1.Perplexity.StreamChatCompletions:input_type -> proxy.v1.StreamChatCompletionsRequest
+	4, // 3: proxy.v1.Perplexity.StreamChatCompletions:output_type -> proxy.v1.StreamChatCompletionsResponse
 	3, // [3:4] is the sub-list for method output_type
 	2, // [2:3] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -408,31 +411,32 @@ var file_proxy_v1_openai_proto_depIdxs = []int32{
 	0, // [0:2] is the sub-list for field type_name
 }
 
-func init() { file_proxy_v1_openai_proto_init() }
-func file_proxy_v1_openai_proto_init() {
-	if File_proxy_v1_openai_proto != nil {
+func init() { file_api_proxy_v1_perplexity_proto_init() }
+func file_api_proxy_v1_perplexity_proto_init() {
+	if File_api_proxy_v1_perplexity_proto != nil {
 		return
 	}
-	file_proxy_v1_openai_proto_msgTypes[2].OneofWrappers = []any{
-		(*StreamResponsesResponse_ReasoningChunk)(nil),
-		(*StreamResponsesResponse_MessageChunk)(nil),
+	file_api_proxy_v1_perplexity_proto_msgTypes[1].OneofWrappers = []any{}
+	file_api_proxy_v1_perplexity_proto_msgTypes[2].OneofWrappers = []any{
+		(*StreamChatCompletionsResponse_ReasoningChunk)(nil),
+		(*StreamChatCompletionsResponse_MessageChunk)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proxy_v1_openai_proto_rawDesc), len(file_proxy_v1_openai_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proxy_v1_perplexity_proto_rawDesc), len(file_api_proxy_v1_perplexity_proto_rawDesc)),
 			NumEnums:      2,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_proxy_v1_openai_proto_goTypes,
-		DependencyIndexes: file_proxy_v1_openai_proto_depIdxs,
-		EnumInfos:         file_proxy_v1_openai_proto_enumTypes,
-		MessageInfos:      file_proxy_v1_openai_proto_msgTypes,
+		GoTypes:           file_api_proxy_v1_perplexity_proto_goTypes,
+		DependencyIndexes: file_api_proxy_v1_perplexity_proto_depIdxs,
+		EnumInfos:         file_api_proxy_v1_perplexity_proto_enumTypes,
+		MessageInfos:      file_api_proxy_v1_perplexity_proto_msgTypes,
 	}.Build()
-	File_proxy_v1_openai_proto = out.File
-	file_proxy_v1_openai_proto_goTypes = nil
-	file_proxy_v1_openai_proto_depIdxs = nil
+	File_api_proxy_v1_perplexity_proto = out.File
+	file_api_proxy_v1_perplexity_proto_goTypes = nil
+	file_api_proxy_v1_perplexity_proto_depIdxs = nil
 }

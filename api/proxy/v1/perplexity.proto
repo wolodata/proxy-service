@@ -19,8 +19,8 @@ enum ErrorReason {
   UPSTREAM_API_ERROR = 2 [(errors.code) = 502];
 }
 
-service OpenAI {
-  rpc StreamResponsesCompletion(StreamResponsesRequest) returns (stream StreamResponsesResponse) {}
+service Perplexity {
+  rpc StreamChatCompletions(StreamChatCompletionsRequest) returns (stream StreamChatCompletionsResponse) {}
 }
 
 enum MessageRole {
@@ -35,16 +35,16 @@ message Message {
   string content = 2;
 }
 
-message StreamResponsesRequest {
+message StreamChatCompletionsRequest {
   string url = 1;
   string model = 2;
   string token = 3;
-  float temperature = 4;
-  float top_p = 5;
+  optional double temperature = 4;
+  optional double top_p = 5;
   repeated Message messages = 6;
 }
 
-message StreamResponsesResponse {
+message StreamChatCompletionsResponse {
   oneof content {
     string reasoning_chunk = 1;
     string message_chunk = 2;

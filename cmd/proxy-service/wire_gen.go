@@ -22,8 +22,8 @@ import (
 
 // wireApp init kratos application.
 func wireApp(confServer *conf.Server, data *conf.Data, logger log.Logger) (*kratos.App, func(), error) {
-	openAIService := service.NewOpenAIService(logger)
-	grpcServer := server.NewGRPCServer(confServer, openAIService, logger)
+	perplexityService := service.NewPerplexityService(logger)
+	grpcServer := server.NewGRPCServer(confServer, perplexityService, logger)
 	app := newApp(logger, grpcServer)
 	return app, func() {
 	}, nil
