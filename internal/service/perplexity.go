@@ -1,14 +1,15 @@
 package service
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/go-kratos/kratos/v2/log"
 
-	perplexity "github.com/sgaunet/perplexity-go/v2"
-
 	pbv1 "github.com/wolodata/proxy-service/api/proxy/v1"
+	"github.com/wolodata/proxy-service/internal/ssestream"
 )
 
 type PerplexityService struct {
@@ -22,19 +23,76 @@ func NewPerplexityService(logger log.Logger) *PerplexityService {
 	}
 }
 
-// createClient 创建 Perplexity 客户端并验证参数
-func (s *PerplexityService) createClient(url, token string) (*perplexity.Client, error) {
-	if strings.TrimSpace(url) == "" {
-		return nil, pbv1.ErrorInvalidArgument("url 为空")
+// Perplexity API 请求结构
+type ChatCompletionRequest struct {
+	Model       string    `json:"model"`
+	Messages    []Message `json:"messages"`
+	Stream      bool      `json:"stream"`
+	Temperature *float64  `json:"temperature,omitempty"`
+	TopP        *float64  `json:"top_p,omitempty"`
+}
+
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// Perplexity API 响应结构
+type ChatCompletionChunk struct {
+	ID            string         `json:"id"`
+	Object        string         `json:"object"`
+	Created       int64          `json:"created"`
+	Model         string         `json:"model"`
+	Usage         *Usage         `json:"usage,omitempty"`
+	Citations     []string       `json:"citations,omitempty"`
+	SearchResults []SearchResult `json:"search_results,omitempty"`
+	Choices       []Choice       `json:"choices"`
+}
+
+type Usage struct {
+	PromptTokens      int    `json:"prompt_tokens"`
+	CompletionTokens  int    `json:"completion_tokens"`
+	TotalTokens       int    `json:"total_tokens"`
+	SearchContextSize string `json:"search_context_size,omitempty"`
+}
+
+type SearchResult struct {
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	Date        string `json:"date,omitempty"`
+	LastUpdated string `json:"last_updated,omitempty"`
+	Snippet     string `json:"snippet"`
+	Source      string `json:"source"`
+}
+
+type Choice struct {
+	Index        int      `json:"index"`
+	Message      *Message `json:"message,omitempty"` // 累积式完整消息
+	Delta        Delta    `json:"delta"`             // 增量消息
+	FinishReason *string  `json:"finish_reason"`
+}
+
+type Delta struct {
+	Role    string `json:"role,omitempty"`
+	Content string `json:"content,omitempty"`
+}
+
+// isPotentialTagPrefix 检查字符串是否可能是标签的前缀
+func (s *PerplexityService) isPotentialTagPrefix(str string, inThinking bool) bool {
+	if len(str) == 0 || len(str) >= 8 {
+		return false
 	}
 
-	if strings.TrimSpace(token) == "" {
-		return nil, pbv1.ErrorInvalidArgument("token 为空")
+	// 根据当前状态检查可能的标签
+	if inThinking {
+		// 在 thinking 模式下，检查是否是 </think> 的前缀
+		closeTag := "</think>"
+		return strings.HasPrefix(closeTag, str)
+	} else {
+		// 不在 thinking 模式下，检查是否是 <think> 的前缀
+		openTag := "<think>"
+		return strings.HasPrefix(openTag, str)
 	}
-
-	client := perplexity.NewClient(token)
-
-	return client, nil
 }
 
 func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletionsRequest, conn pbv1.Perplexity_StreamChatCompletionsServer) error {
@@ -46,15 +104,14 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 		"top_p", req.GetTopP(),
 	)
 
-	// 1. 创建客户端
-	client, err := s.createClient(req.GetUrl(), req.GetToken())
-	if err != nil {
-		s.log.Errorw("msg", "创建客户端失败", "error", err)
-		return err
+	// 1. 验证基本参数
+	token := strings.TrimSpace(req.GetToken())
+	if token == "" {
+		return pbv1.ErrorInvalidArgument("token 为空")
 	}
 
-	// 2. 将消息从 gRPC 格式转换为 perplexity-go 格式
-	msgs := make([]perplexity.Message, 0, len(req.GetMessages()))
+	// 2. 转换消息格式
+	msgs := make([]Message, 0, len(req.GetMessages()))
 	for _, msg := range req.GetMessages() {
 		var role string
 		switch msg.GetRole() {
@@ -75,7 +132,7 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 			return pbv1.ErrorInvalidArgument("消息内容为空")
 		}
 
-		msgs = append(msgs, perplexity.Message{
+		msgs = append(msgs, Message{
 			Role:    role,
 			Content: content,
 		})
@@ -83,77 +140,105 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 
 	s.log.Debugw("msg", "消息转换完成", "count", len(msgs))
 
-	// 3. 构建补全请求
-	completionRequest := perplexity.NewCompletionRequest(
-		perplexity.WithModel(req.GetModel()),
-		perplexity.WithMessages(msgs),
-		perplexity.WithStream(true),
-	)
+	if len(req.GetMessages()) == 0 {
+		return pbv1.ErrorInvalidArgument("至少需要一条消息")
+	}
 
-	// 添加可选参数
+	// 3. 构建请求
+	chatReq := ChatCompletionRequest{
+		Model:    req.GetModel(),
+		Messages: msgs,
+		Stream:   true,
+	}
+
 	if req.Temperature != nil {
-		completionRequest.Temperature = req.GetTemperature()
+		chatReq.Temperature = req.Temperature
 		s.log.Debugw("msg", "设置温度参数", "value", req.GetTemperature())
 	}
 
 	if req.TopP != nil {
-		completionRequest.TopP = req.GetTopP()
+		chatReq.TopP = req.TopP
 		s.log.Debugw("msg", "设置 top_p 参数", "value", req.GetTopP())
 	}
 
-	// 4. 验证请求
-	validator := perplexity.NewRequestValidator()
-	if err := validator.ValidateRequest(completionRequest); err != nil {
-		s.log.Errorw("msg", "请求验证失败", "error", err)
-		return pbv1.ErrorInvalidArgument("验证失败: %s", err.Error())
+	// 4. 序列化请求体
+	reqBody, err := json.Marshal(chatReq)
+	if err != nil {
+		s.log.Errorw("msg", "序列化请求失败", "error", err)
+		return pbv1.ErrorInvalidArgument("请求序列化失败: %s", err.Error())
 	}
 
-	// 5. 设置流式传输
-	var wg sync.WaitGroup
-	chResponses := make(chan perplexity.CompletionResponse)
-	streamCtx := conn.Context()
+	s.log.Debugw("msg", "请求体", "body", string(reqBody))
 
-	wg.Add(1)
-	go func() {
-		if err := client.SendSSEHTTPRequestWithContext(streamCtx, &wg, completionRequest, chResponses); err != nil {
-			s.log.Errorw("msg", "SSE 请求失败", "error", err)
-		}
-		// 注意：channel 由 SendSSEHTTPRequestWithContext 负责关闭
-		// 且 wg.Done() 也由 SendSSEHTTPRequestWithContext 负责调用
-		s.log.Debugw("msg", "SSE 请求已完成")
-	}()
+	// 5. 创建 HTTP 请求
+	httpReq, err := http.NewRequestWithContext(
+		conn.Context(),
+		http.MethodPost,
+		"https://api.perplexity.ai/chat/completions",
+		bytes.NewReader(reqBody),
+	)
+	if err != nil {
+		s.log.Errorw("msg", "创建 HTTP 请求失败", "error", err)
+		return pbv1.ErrorUpstreamApiError("创建请求失败: %s", err.Error())
+	}
 
-	s.log.Infow("msg", "SSE 请求已发起")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "text/event-stream")
 
-	// 6. 使用状态机处理流式响应
-	var lastContent string
+	// 6. 发送请求
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		s.log.Errorw("msg", "HTTP 请求失败", "error", err)
+		return pbv1.ErrorUpstreamApiError("API 请求失败: %s", err.Error())
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		s.log.Errorw("msg", "API 返回错误状态码", "status", resp.StatusCode)
+		return pbv1.ErrorUpstreamApiError("API 返回错误状态码: %d", resp.StatusCode)
+	}
+
+	s.log.Infow("msg", "SSE 连接已建立")
+
+	// 7. 使用 ssestream 处理流式响应
+	decoder := ssestream.NewDecoder(resp)
+	stream := ssestream.NewStream[ChatCompletionChunk](decoder, nil)
+	defer stream.Close()
+
+	// 8. 使用状态机处理流式响应
 	inThinking := false
+	var buffer strings.Builder // 缓冲区，用于处理跨chunk的标签
 
-	for response := range chResponses {
-		if len(response.Choices) == 0 {
+	for stream.Next() {
+		chunk := stream.Current()
+
+		if len(chunk.Choices) == 0 {
 			continue
 		}
 
-		// 获取当前累积的内容
-		currentContent := response.GetLastContent()
-
-		// 计算增量内容（差分）
-		if len(currentContent) <= len(lastContent) {
-			continue // 没有新内容
+		// 获取增量内容
+		deltaContent := chunk.Choices[0].Delta.Content
+		if deltaContent == "" {
+			continue
 		}
 
-		newContent := currentContent[len(lastContent):]
-		s.log.Debugw("msg", "收到增量内容", "length", len(newContent), "in_thinking", inThinking)
+		s.log.Debugw("msg", "收到增量内容", "length", len(deltaContent), "in_thinking", inThinking)
 
-		// 状态机：检测 <think> 和 </think> 标签
-		// 逐字符处理新内容以处理标签
+		// 将缓冲区内容与当前chunk合并处理
+		if buffer.Len() > 0 {
+			deltaContent = buffer.String() + deltaContent
+			buffer.Reset()
+		}
+
+		// 状态机：逐字符处理以检测 <think> 和 </think> 标签
 		var reasoningBuf strings.Builder
 		var messageBuf strings.Builder
 
 		i := 0
-		for i < len(newContent) {
+		for i < len(deltaContent) {
 			// 检查 <think> 标签
-			if !inThinking && strings.HasPrefix(newContent[i:], "<think>") {
+			if !inThinking && strings.HasPrefix(deltaContent[i:], "<think>") {
 				inThinking = true
 				i += len("<think>")
 				s.log.Debugw("msg", "进入思考模式")
@@ -161,23 +246,35 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 			}
 
 			// 检查 </think> 标签
-			if inThinking && strings.HasPrefix(newContent[i:], "</think>") {
+			if inThinking && strings.HasPrefix(deltaContent[i:], "</think>") {
 				inThinking = false
 				i += len("</think>")
 				s.log.Debugw("msg", "退出思考模式")
 				continue
 			}
 
+			// 检查是否接近chunk末尾，且可能有部分标签
+			remaining := deltaContent[i:]
+			if len(remaining) < 8 { // </think> 最长8字符
+				// 检查是否是标签的部分前缀
+				if s.isPotentialTagPrefix(remaining, inThinking) {
+					// 保存到缓冲区，等待下一个chunk
+					buffer.WriteString(remaining)
+					s.log.Debugw("msg", "检测到可能的部分标签，保存到缓冲区", "buffer", remaining)
+					break
+				}
+			}
+
 			// 根据当前状态累积内容
 			if inThinking {
-				reasoningBuf.WriteByte(newContent[i])
+				reasoningBuf.WriteByte(deltaContent[i])
 			} else {
-				messageBuf.WriteByte(newContent[i])
+				messageBuf.WriteByte(deltaContent[i])
 			}
 			i++
 		}
 
-		// 统一发送当前 chunk 累积的内容
+		// 发送推理块
 		if reasoningBuf.Len() > 0 {
 			if err := conn.Send(&pbv1.StreamChatCompletionsResponse{
 				Content: &pbv1.StreamChatCompletionsResponse_ReasoningChunk{
@@ -187,9 +284,9 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 				s.log.Errorw("msg", "发送推理块失败", "error", err)
 				return pbv1.ErrorUpstreamApiError("流发送错误: %s", err.Error())
 			}
-			reasoningBuf.Reset()
 		}
 
+		// 发送消息块
 		if messageBuf.Len() > 0 {
 			if err := conn.Send(&pbv1.StreamChatCompletionsResponse{
 				Content: &pbv1.StreamChatCompletionsResponse_MessageChunk{
@@ -199,17 +296,43 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 				s.log.Errorw("msg", "发送消息块失败", "error", err)
 				return pbv1.ErrorUpstreamApiError("流发送错误: %s", err.Error())
 			}
-			messageBuf.Reset()
 		}
-
-		lastContent = currentContent
 	}
 
-	s.log.Infow(
-		"msg", "流式对话补全完成",
-		"model", req.GetModel(),
-		"total_content_length", len(lastContent),
-	)
+	// 处理缓冲区中剩余的内容（如果有）
+	if buffer.Len() > 0 {
+		remaining := buffer.String()
+		s.log.Debugw("msg", "处理缓冲区剩余内容", "content", remaining)
+
+		// 将剩余内容作为普通文本发送
+		var resp *pbv1.StreamChatCompletionsResponse
+		if inThinking {
+			resp = &pbv1.StreamChatCompletionsResponse{
+				Content: &pbv1.StreamChatCompletionsResponse_ReasoningChunk{
+					ReasoningChunk: remaining,
+				},
+			}
+		} else {
+			resp = &pbv1.StreamChatCompletionsResponse{
+				Content: &pbv1.StreamChatCompletionsResponse_MessageChunk{
+					MessageChunk: remaining,
+				},
+			}
+		}
+
+		if err := conn.Send(resp); err != nil {
+			s.log.Errorw("msg", "发送缓冲区内容失败", "error", err)
+			return pbv1.ErrorUpstreamApiError("流发送错误: %s", err.Error())
+		}
+	}
+
+	// 9. 检查流错误
+	if err := stream.Err(); err != nil {
+		s.log.Errorw("msg", "流处理错误", "error", err)
+		return pbv1.ErrorUpstreamApiError("流处理错误: %s", err.Error())
+	}
+
+	s.log.Infow("msg", "流式对话补全完成", "model", req.GetModel())
 
 	return nil
 }
