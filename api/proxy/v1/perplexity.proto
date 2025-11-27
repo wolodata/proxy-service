@@ -43,9 +43,21 @@ message StreamChatCompletionsRequest {
   repeated Message messages = 5;
 }
 
+message SearchResult {
+  string title = 1;
+  string url = 2;
+  optional string date = 3;
+  optional string last_updated = 4;
+  string snippet = 5;
+  string source = 6;
+}
+
 message StreamChatCompletionsResponse {
   oneof content {
     string reasoning_chunk = 1;
     string message_chunk = 2;
   }
+  // 元数据字段 - 每个 chunk 都可能包含
+  repeated string citations = 3;
+  repeated SearchResult search_results = 4;
 }

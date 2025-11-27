@@ -32,6 +32,10 @@ Thumbs.db
 *.log
 bin/
 
+# Test outputs
+perplexity_test_output_*.txt
+test_perplexity_api.go
+
 # Develop tools
 .vscode/
 .idea/

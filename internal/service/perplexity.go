@@ -54,6 +54,10 @@ type Usage struct {
 	CompletionTokens  int    `json:"completion_tokens"`
 	TotalTokens       int    `json:"total_tokens"`
 	SearchContextSize string `json:"search_context_size,omitempty"`
+	// sonar-deep-research 模型的额外字段
+	CitationTokens   int `json:"citation_tokens,omitempty"`
+	NumSearchQueries int `json:"num_search_queries,omitempty"`
+	ReasoningTokens  int `json:"reasoning_tokens,omitempty"`
 }
 
 type SearchResult struct {
@@ -213,6 +217,40 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 	for stream.Next() {
 		chunk := stream.Current()
 
+		// 记录 usage 信息（仅用于日志）
+		if chunk.Usage != nil {
+			s.log.Debugw("msg", "收到 usage 信息", "usage", chunk.Usage)
+		}
+
+		// 准备元数据（citations 和 search_results）
+		var citations []string
+		var searchResults []*pbv1.SearchResult
+
+		if chunk.Citations != nil {
+			citations = chunk.Citations
+		}
+
+		if chunk.SearchResults != nil {
+			searchResults = make([]*pbv1.SearchResult, 0, len(chunk.SearchResults))
+			for _, sr := range chunk.SearchResults {
+				pbSr := &pbv1.SearchResult{
+					Title:       sr.Title,
+					Url:         sr.URL,
+					Date:        nil,
+					LastUpdated: nil,
+					Snippet:     sr.Snippet,
+					Source:      sr.Source,
+				}
+				if sr.Date != "" {
+					pbSr.Date = &sr.Date
+				}
+				if sr.LastUpdated != "" {
+					pbSr.LastUpdated = &sr.LastUpdated
+				}
+				searchResults = append(searchResults, pbSr)
+			}
+		}
+
 		if len(chunk.Choices) == 0 {
 			continue
 		}
@@ -274,24 +312,28 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 			i++
 		}
 
-		// 发送推理块
+		// 发送推理块（带元数据）
 		if reasoningBuf.Len() > 0 {
 			if err := conn.Send(&pbv1.StreamChatCompletionsResponse{
 				Content: &pbv1.StreamChatCompletionsResponse_ReasoningChunk{
 					ReasoningChunk: reasoningBuf.String(),
 				},
+				Citations:     citations,
+				SearchResults: searchResults,
 			}); err != nil {
 				s.log.Errorw("msg", "发送推理块失败", "error", err)
 				return pbv1.ErrorUpstreamApiError("流发送错误: %s", err.Error())
 			}
 		}
 
-		// 发送消息块
+		// 发送消息块（带元数据）
 		if messageBuf.Len() > 0 {
 			if err := conn.Send(&pbv1.StreamChatCompletionsResponse{
 				Content: &pbv1.StreamChatCompletionsResponse_MessageChunk{
 					MessageChunk: messageBuf.String(),
 				},
+				Citations:     citations,
+				SearchResults: searchResults,
 			}); err != nil {
 				s.log.Errorw("msg", "发送消息块失败", "error", err)
 				return pbv1.ErrorUpstreamApiError("流发送错误: %s", err.Error())

@@ -254,20 +254,107 @@ func (x *StreamChatCompletionsRequest) GetMessages() []*Message {
 	return nil
 }
 
+type SearchResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Title         string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
+	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Date          *string                `protobuf:"bytes,3,opt,name=date,proto3,oneof" json:"date,omitempty"`
+	LastUpdated   *string                `protobuf:"bytes,4,opt,name=last_updated,json=lastUpdated,proto3,oneof" json:"last_updated,omitempty"`
+	Snippet       string                 `protobuf:"bytes,5,opt,name=snippet,proto3" json:"snippet,omitempty"`
+	Source        string                 `protobuf:"bytes,6,opt,name=source,proto3" json:"source,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchResult) Reset() {
+	*x = SearchResult{}
+	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchResult) ProtoMessage() {}
+
+func (x *SearchResult) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchResult.ProtoReflect.Descriptor instead.
+func (*SearchResult) Descriptor() ([]byte, []int) {
+	return file_api_proxy_v1_perplexity_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SearchResult) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *SearchResult) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *SearchResult) GetDate() string {
+	if x != nil && x.Date != nil {
+		return *x.Date
+	}
+	return ""
+}
+
+func (x *SearchResult) GetLastUpdated() string {
+	if x != nil && x.LastUpdated != nil {
+		return *x.LastUpdated
+	}
+	return ""
+}
+
+func (x *SearchResult) GetSnippet() string {
+	if x != nil {
+		return x.Snippet
+	}
+	return ""
+}
+
+func (x *SearchResult) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
 type StreamChatCompletionsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Content:
 	//
 	//	*StreamChatCompletionsResponse_ReasoningChunk
 	//	*StreamChatCompletionsResponse_MessageChunk
-	Content       isStreamChatCompletionsResponse_Content `protobuf_oneof:"content"`
+	Content isStreamChatCompletionsResponse_Content `protobuf_oneof:"content"`
+	// 元数据字段 - 每个 chunk 都可能包含
+	Citations     []string        `protobuf:"bytes,3,rep,name=citations,proto3" json:"citations,omitempty"`
+	SearchResults []*SearchResult `protobuf:"bytes,4,rep,name=search_results,json=searchResults,proto3" json:"search_results,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StreamChatCompletionsResponse) Reset() {
 	*x = StreamChatCompletionsResponse{}
-	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[2]
+	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -279,7 +366,7 @@ func (x *StreamChatCompletionsResponse) String() string {
 func (*StreamChatCompletionsResponse) ProtoMessage() {}
 
 func (x *StreamChatCompletionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[2]
+	mi := &file_api_proxy_v1_perplexity_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -292,7 +379,7 @@ func (x *StreamChatCompletionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamChatCompletionsResponse.ProtoReflect.Descriptor instead.
 func (*StreamChatCompletionsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proxy_v1_perplexity_proto_rawDescGZIP(), []int{2}
+	return file_api_proxy_v1_perplexity_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *StreamChatCompletionsResponse) GetContent() isStreamChatCompletionsResponse_Content {
@@ -318,6 +405,20 @@ func (x *StreamChatCompletionsResponse) GetMessageChunk() string {
 		}
 	}
 	return ""
+}
+
+func (x *StreamChatCompletionsResponse) GetCitations() []string {
+	if x != nil {
+		return x.Citations
+	}
+	return nil
+}
+
+func (x *StreamChatCompletionsResponse) GetSearchResults() []*SearchResult {
+	if x != nil {
+		return x.SearchResults
+	}
+	return nil
 }
 
 type isStreamChatCompletionsResponse_Content interface {
@@ -351,10 +452,21 @@ const file_api_proxy_v1_perplexity_proto_rawDesc = "" +
 	"\x05top_p\x18\x04 \x01(\x01H\x01R\x04topP\x88\x01\x01\x12-\n" +
 	"\bmessages\x18\x05 \x03(\v2\x11.proxy.v1.MessageR\bmessagesB\x0e\n" +
 	"\f_temperatureB\b\n" +
-	"\x06_top_p\"|\n" +
+	"\x06_top_p\"\xc3\x01\n" +
+	"\fSearchResult\x12\x14\n" +
+	"\x05title\x18\x01 \x01(\tR\x05title\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12\x17\n" +
+	"\x04date\x18\x03 \x01(\tH\x00R\x04date\x88\x01\x01\x12&\n" +
+	"\flast_updated\x18\x04 \x01(\tH\x01R\vlastUpdated\x88\x01\x01\x12\x18\n" +
+	"\asnippet\x18\x05 \x01(\tR\asnippet\x12\x16\n" +
+	"\x06source\x18\x06 \x01(\tR\x06sourceB\a\n" +
+	"\x05_dateB\x0f\n" +
+	"\r_last_updated\"\xd9\x01\n" +
 	"\x1dStreamChatCompletionsResponse\x12)\n" +
 	"\x0freasoning_chunk\x18\x01 \x01(\tH\x00R\x0ereasoningChunk\x12%\n" +
-	"\rmessage_chunk\x18\x02 \x01(\tH\x00R\fmessageChunkB\t\n" +
+	"\rmessage_chunk\x18\x02 \x01(\tH\x00R\fmessageChunk\x12\x1c\n" +
+	"\tcitations\x18\x03 \x03(\tR\tcitations\x12=\n" +
+	"\x0esearch_results\x18\x04 \x03(\v2\x16.proxy.v1.SearchResultR\rsearchResultsB\t\n" +
 	"\acontent*b\n" +
 	"\vErrorReason\x12\x1a\n" +
 	"\x10INVALID_ARGUMENT\x10\x00\x1a\x04\xa8E\x90\x03\x12\x13\n" +
@@ -382,24 +494,26 @@ func file_api_proxy_v1_perplexity_proto_rawDescGZIP() []byte {
 }
 
 var file_api_proxy_v1_perplexity_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_api_proxy_v1_perplexity_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_api_proxy_v1_perplexity_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_api_proxy_v1_perplexity_proto_goTypes = []any{
 	(ErrorReason)(0),                      // 0: proxy.v1.ErrorReason
 	(MessageRole)(0),                      // 1: proxy.v1.MessageRole
 	(*Message)(nil),                       // 2: proxy.v1.Message
 	(*StreamChatCompletionsRequest)(nil),  // 3: proxy.v1.StreamChatCompletionsRequest
-	(*StreamChatCompletionsResponse)(nil), // 4: proxy.v1.StreamChatCompletionsResponse
+	(*SearchResult)(nil),                  // 4: proxy.v1.SearchResult
+	(*StreamChatCompletionsResponse)(nil), // 5: proxy.v1.StreamChatCompletionsResponse
 }
 var file_api_proxy_v1_perplexity_proto_depIdxs = []int32{
 	1, // 0: proxy.v1.Message.role:type_name -> proxy.v1.MessageRole
 	2, // 1: proxy.v1.StreamChatCompletionsRequest.messages:type_name -> proxy.v1.Message
-	3, // 2: proxy.v1.Perplexity.StreamChatCompletions:input_type -> proxy.v1.StreamChatCompletionsRequest
-	4, // 3: proxy.v1.Perplexity.StreamChatCompletions:output_type -> proxy.v1.StreamChatCompletionsResponse
-	3, // [3:4] is the sub-list for method output_type
-	2, // [2:3] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	4, // 2: proxy.v1.StreamChatCompletionsResponse.search_results:type_name -> proxy.v1.SearchResult
+	3, // 3: proxy.v1.Perplexity.StreamChatCompletions:input_type -> proxy.v1.StreamChatCompletionsRequest
+	5, // 4: proxy.v1.Perplexity.StreamChatCompletions:output_type -> proxy.v1.StreamChatCompletionsResponse
+	4, // [4:5] is the sub-list for method output_type
+	3, // [3:4] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_api_proxy_v1_perplexity_proto_init() }
@@ -408,7 +522,8 @@ func file_api_proxy_v1_perplexity_proto_init() {
 		return
 	}
 	file_api_proxy_v1_perplexity_proto_msgTypes[1].OneofWrappers = []any{}
-	file_api_proxy_v1_perplexity_proto_msgTypes[2].OneofWrappers = []any{
+	file_api_proxy_v1_perplexity_proto_msgTypes[2].OneofWrappers = []any{}
+	file_api_proxy_v1_perplexity_proto_msgTypes[3].OneofWrappers = []any{
 		(*StreamChatCompletionsResponse_ReasoningChunk)(nil),
 		(*StreamChatCompletionsResponse_MessageChunk)(nil),
 	}
@@ -418,7 +533,7 @@ func file_api_proxy_v1_perplexity_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proxy_v1_perplexity_proto_rawDesc), len(file_api_proxy_v1_perplexity_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
