@@ -1,9 +1,6 @@
 package service
 
 import (
-	"bytes"
-	"encoding/json"
-	"net/http"
 	"strings"
 
 	"github.com/go-kratos/kratos/v2/log"
@@ -11,17 +8,18 @@ import (
 	pbv1 "github.com/wolodata/proxy-service/api/proxy/v1"
 	"github.com/wolodata/proxy-service/internal/client/perplexity"
 	"github.com/wolodata/proxy-service/internal/converter"
-	"github.com/wolodata/proxy-service/internal/ssestream"
 )
 
 type PerplexityService struct {
 	pbv1.UnimplementedPerplexityServer
-	log *log.Helper
+	log    *log.Helper
+	client *perplexity.Client
 }
 
 func NewPerplexityService(logger log.Logger) *PerplexityService {
 	return &PerplexityService{
-		log: log.NewHelper(logger),
+		log:    log.NewHelper(logger),
+		client: perplexity.NewClient(),
 	}
 }
 
@@ -196,52 +194,17 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 		s.log.Debugw("msg", "设置 top_p 参数", "value", req.GetTopP())
 	}
 
-	// 4. 序列化请求体
-	reqBody, err := json.Marshal(chatReq)
+	// 4. 调用 Perplexity API
+	stream, err := s.client.StreamChatCompletions(conn.Context(), token, chatReq)
 	if err != nil {
-		s.log.Errorw("msg", "序列化请求失败", "error", err)
-		return pbv1.ErrorInvalidArgument("请求序列化失败: %s", err.Error())
+		s.log.Errorw("msg", "调用 Perplexity API 失败", "error", err)
+		return pbv1.ErrorUpstreamApiError("API 调用失败: %s", err.Error())
 	}
-
-	s.log.Debugw("msg", "请求体", "body", string(reqBody))
-
-	// 5. 创建 HTTP 请求
-	httpReq, err := http.NewRequestWithContext(
-		conn.Context(),
-		http.MethodPost,
-		"https://api.perplexity.ai/chat/completions",
-		bytes.NewReader(reqBody),
-	)
-	if err != nil {
-		s.log.Errorw("msg", "创建 HTTP 请求失败", "error", err)
-		return pbv1.ErrorUpstreamApiError("创建请求失败: %s", err.Error())
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+token)
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "text/event-stream")
-
-	// 6. 发送请求
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		s.log.Errorw("msg", "HTTP 请求失败", "error", err)
-		return pbv1.ErrorUpstreamApiError("API 请求失败: %s", err.Error())
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		s.log.Errorw("msg", "API 返回错误状态码", "status", resp.StatusCode)
-		return pbv1.ErrorUpstreamApiError("API 返回错误状态码: %d", resp.StatusCode)
-	}
+	defer stream.Close()
 
 	s.log.Infow("msg", "SSE 连接已建立")
 
-	// 7. 使用 ssestream 处理流式响应
-	decoder := ssestream.NewDecoder(resp)
-	stream := ssestream.NewStream[perplexity.ConciseChunk](decoder, nil)
-	defer stream.Close()
-
-	// 8. 处理流式响应
+	// 5. 处理流式响应
 	for stream.Next() {
 		chunk := stream.Current()
 
@@ -266,7 +229,7 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 		}
 	}
 
-	// 9. 检查流错误
+	// 6. 检查流错误
 	if err := stream.Err(); err != nil {
 		s.log.Errorw("msg", "流处理错误", "error", err)
 		return pbv1.ErrorUpstreamApiError("流处理错误: %s", err.Error())

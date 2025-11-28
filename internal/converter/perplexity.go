@@ -88,9 +88,9 @@ func ConvertUsage(usage *perplexity.Usage) *pbv1.Usage {
 	if usage.TotalTokens > 0 {
 		pbUsage.TotalTokens = ptrInt32(int32(usage.TotalTokens))
 	}
-	if usage.SearchContextSize > 0 {
-		pbUsage.SearchContextSize = ptrInt32(int32(usage.SearchContextSize))
-	}
+	// SearchContextSize 是字符串类型 ("low", "medium", "high")，proto 中定义为 int32
+	// 暂时跳过转换，因为无法直接映射
+	// 如果需要，可以做映射: low=1, medium=2, high=3
 
 	if usage.Cost != nil {
 		if usage.Cost.InputTokensCost > 0 {

@@ -21,9 +21,11 @@ type ConciseChunk struct {
 	Object        string          `json:"object"` // chunk 类型标识
 	Created       int64           `json:"created"`
 	Model         string          `json:"model"`
+	Type          string          `json:"type,omitempty"`
 	Choices       []ConciseChoice `json:"choices,omitempty"`
 	SearchResults []SearchResult  `json:"search_results,omitempty"`
 	Images        []ImageResult   `json:"images,omitempty"`
+	Citations     []string        `json:"citations,omitempty"`
 	Usage         *Usage          `json:"usage,omitempty"`
 }
 
@@ -35,6 +37,7 @@ type ConciseChoice struct {
 }
 
 type ConciseDelta struct {
+	Role           string          `json:"role,omitempty"`
 	Content        string          `json:"content,omitempty"`
 	ReasoningSteps []ReasoningStep `json:"reasoning_steps,omitempty"`
 }
@@ -72,16 +75,20 @@ type ImageResult struct {
 }
 
 type Usage struct {
-	PromptTokens      int   `json:"prompt_tokens,omitempty"`
-	CompletionTokens  int   `json:"completion_tokens,omitempty"`
-	TotalTokens       int   `json:"total_tokens,omitempty"`
-	SearchContextSize int   `json:"search_context_size,omitempty"`
-	Cost              *Cost `json:"cost,omitempty"`
+	PromptTokens      int    `json:"prompt_tokens,omitempty"`
+	CompletionTokens  int    `json:"completion_tokens,omitempty"`
+	TotalTokens       int    `json:"total_tokens,omitempty"`
+	SearchContextSize string `json:"search_context_size,omitempty"`
+	CitationTokens    int    `json:"citation_tokens,omitempty"`
+	ReasoningTokens   int    `json:"reasoning_tokens,omitempty"`
+	NumSearchQueries  int    `json:"num_search_queries,omitempty"`
+	Cost              *Cost  `json:"cost,omitempty"`
 }
 
 type Cost struct {
-	InputTokensCost  float64 `json:"input_tokens_cost,omitempty"`
-	OutputTokensCost float64 `json:"output_tokens_cost,omitempty"`
-	RequestCost      float64 `json:"request_cost,omitempty"`
-	TotalCost        float64 `json:"total_cost,omitempty"`
+	InputTokensCost    float64 `json:"input_tokens_cost,omitempty"`
+	OutputTokensCost   float64 `json:"output_tokens_cost,omitempty"`
+	CitationTokensCost float64 `json:"citation_tokens_cost,omitempty"`
+	RequestCost        float64 `json:"request_cost,omitempty"`
+	TotalCost          float64 `json:"total_cost,omitempty"`
 }

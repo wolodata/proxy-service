@@ -40,3 +40,6 @@ test_perplexity_api.go
 .vscode/
 .idea/
 *.swp
+
+# config
+.env
