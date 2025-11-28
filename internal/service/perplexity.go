@@ -9,6 +9,8 @@ import (
 	"github.com/go-kratos/kratos/v2/log"
 
 	pbv1 "github.com/wolodata/proxy-service/api/proxy/v1"
+	"github.com/wolodata/proxy-service/internal/client/perplexity"
+	"github.com/wolodata/proxy-service/internal/converter"
 	"github.com/wolodata/proxy-service/internal/ssestream"
 )
 
@@ -23,85 +25,113 @@ func NewPerplexityService(logger log.Logger) *PerplexityService {
 	}
 }
 
-// Perplexity API 请求结构
-type ChatCompletionRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Stream      bool      `json:"stream"`
-	Temperature *float64  `json:"temperature,omitempty"`
-	TopP        *float64  `json:"top_p,omitempty"`
+// 处理不同类型的 chunk
+func (s *PerplexityService) processChunk(chunk *perplexity.ConciseChunk) (*pbv1.StreamChatCompletionsResponse, error) {
+	switch chunk.Object {
+	case "chat.reasoning":
+		return s.handleReasoning(chunk)
+	case "chat.reasoning.done":
+		return s.handleReasoningDone(chunk)
+	case "chat.completion.chunk":
+		return s.handleCompletionChunk(chunk)
+	case "chat.completion.done":
+		return s.handleCompletionDone(chunk)
+	default:
+		s.log.Warnw("msg", "未知的 chunk 类型", "type", chunk.Object)
+		return nil, nil
+	}
 }
 
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-// Perplexity API 响应结构
-type ChatCompletionChunk struct {
-	ID            string         `json:"id"`
-	Object        string         `json:"object"`
-	Created       int64          `json:"created"`
-	Model         string         `json:"model"`
-	Usage         *Usage         `json:"usage,omitempty"`
-	Citations     []string       `json:"citations,omitempty"`
-	SearchResults []SearchResult `json:"search_results,omitempty"`
-	Choices       []Choice       `json:"choices"`
-}
-
-type Usage struct {
-	PromptTokens      int    `json:"prompt_tokens"`
-	CompletionTokens  int    `json:"completion_tokens"`
-	TotalTokens       int    `json:"total_tokens"`
-	SearchContextSize string `json:"search_context_size,omitempty"`
-	// sonar-deep-research 模型的额外字段
-	CitationTokens   int `json:"citation_tokens,omitempty"`
-	NumSearchQueries int `json:"num_search_queries,omitempty"`
-	ReasoningTokens  int `json:"reasoning_tokens,omitempty"`
-}
-
-type SearchResult struct {
-	Title       string `json:"title"`
-	URL         string `json:"url"`
-	Date        string `json:"date,omitempty"`
-	LastUpdated string `json:"last_updated,omitempty"`
-	Snippet     string `json:"snippet"`
-	Source      string `json:"source"`
-}
-
-type Choice struct {
-	Index        int      `json:"index"`
-	Message      *Message `json:"message,omitempty"` // 累积式完整消息
-	Delta        Delta    `json:"delta"`             // 增量消息
-	FinishReason *string  `json:"finish_reason"`
-}
-
-type Delta struct {
-	Role    string `json:"role,omitempty"`
-	Content string `json:"content,omitempty"`
-}
-
-// isPotentialTagPrefix 检查字符串是否可能是标签的前缀
-func (s *PerplexityService) isPotentialTagPrefix(str string, inThinking bool) bool {
-	if len(str) == 0 || len(str) >= 8 {
-		return false
+func (s *PerplexityService) handleReasoning(chunk *perplexity.ConciseChunk) (*pbv1.StreamChatCompletionsResponse, error) {
+	if len(chunk.Choices) == 0 || chunk.Choices[0].Delta == nil {
+		return nil, nil
 	}
 
-	// 根据当前状态检查可能的标签
-	if inThinking {
-		// 在 thinking 模式下，检查是否是 </think> 的前缀
-		closeTag := "</think>"
-		return strings.HasPrefix(closeTag, str)
-	} else {
-		// 不在 thinking 模式下，检查是否是 <think> 的前缀
-		openTag := "<think>"
-		return strings.HasPrefix(openTag, str)
+	delta := chunk.Choices[0].Delta
+	if len(delta.ReasoningSteps) == 0 {
+		return nil, nil
 	}
+
+	return &pbv1.StreamChatCompletionsResponse{
+		Data: &pbv1.StreamChatCompletionsResponse_Reasoning{
+			Reasoning: &pbv1.ReasoningChunk{
+				Id:             chunk.ID,
+				Model:          chunk.Model,
+				Created:        chunk.Created,
+				ReasoningSteps: converter.ConvertReasoningSteps(delta.ReasoningSteps),
+			},
+		},
+	}, nil
+}
+
+func (s *PerplexityService) handleReasoningDone(chunk *perplexity.ConciseChunk) (*pbv1.StreamChatCompletionsResponse, error) {
+	reasoningDone := &pbv1.ReasoningDoneChunk{
+		Id:            chunk.ID,
+		Model:         chunk.Model,
+		Created:       chunk.Created,
+		SearchResults: converter.ConvertSearchResults(chunk.SearchResults),
+		Images:        converter.ConvertImageResults(chunk.Images),
+	}
+
+	// 从 message 获取完整的 reasoning steps
+	if len(chunk.Choices) > 0 && chunk.Choices[0].Message != nil {
+		reasoningDone.ReasoningSteps = converter.ConvertReasoningSteps(chunk.Choices[0].Message.ReasoningSteps)
+	}
+
+	return &pbv1.StreamChatCompletionsResponse{
+		Data: &pbv1.StreamChatCompletionsResponse_ReasoningDone{
+			ReasoningDone: reasoningDone,
+		},
+	}, nil
+}
+
+func (s *PerplexityService) handleCompletionChunk(chunk *perplexity.ConciseChunk) (*pbv1.StreamChatCompletionsResponse, error) {
+	if len(chunk.Choices) == 0 || chunk.Choices[0].Delta == nil {
+		return nil, nil
+	}
+
+	delta := chunk.Choices[0].Delta
+	if delta.Content == "" {
+		return nil, nil
+	}
+
+	return &pbv1.StreamChatCompletionsResponse{
+		Data: &pbv1.StreamChatCompletionsResponse_Completion{
+			Completion: &pbv1.CompletionChunk{
+				Id:      chunk.ID,
+				Model:   chunk.Model,
+				Created: chunk.Created,
+				Content: &delta.Content,
+			},
+		},
+	}, nil
+}
+
+func (s *PerplexityService) handleCompletionDone(chunk *perplexity.ConciseChunk) (*pbv1.StreamChatCompletionsResponse, error) {
+	completionDone := &pbv1.CompletionDoneChunk{
+		Id:            chunk.ID,
+		Model:         chunk.Model,
+		Created:       chunk.Created,
+		SearchResults: converter.ConvertSearchResults(chunk.SearchResults),
+		Images:        converter.ConvertImageResults(chunk.Images),
+		Usage:         converter.ConvertUsage(chunk.Usage),
+	}
+
+	// 从 message 获取完整内容
+	if len(chunk.Choices) > 0 && chunk.Choices[0].Message != nil {
+		completionDone.Content = &chunk.Choices[0].Message.Content
+	}
+
+	return &pbv1.StreamChatCompletionsResponse{
+		Data: &pbv1.StreamChatCompletionsResponse_CompletionDone{
+			CompletionDone: completionDone,
+		},
+	}, nil
 }
 
 func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletionsRequest, conn pbv1.Perplexity_StreamChatCompletionsServer) error {
 	s.log.Infow(
-		"msg", "流式对话补全开始",
+		"msg", "流式对话补全开始（简洁模式）",
 		"model", req.GetModel(),
 		"message_count", len(req.GetMessages()),
 		"temperature", req.GetTemperature(),
@@ -115,7 +145,7 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 	}
 
 	// 2. 转换消息格式
-	msgs := make([]Message, 0, len(req.GetMessages()))
+	msgs := make([]perplexity.Message, 0, len(req.GetMessages()))
 	for _, msg := range req.GetMessages() {
 		var role string
 		switch msg.GetRole() {
@@ -136,23 +166,24 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 			return pbv1.ErrorInvalidArgument("消息内容为空")
 		}
 
-		msgs = append(msgs, Message{
+		msgs = append(msgs, perplexity.Message{
 			Role:    role,
 			Content: content,
 		})
 	}
 
-	s.log.Debugw("msg", "消息转换完成", "count", len(msgs))
-
-	if len(req.GetMessages()) == 0 {
+	if len(msgs) == 0 {
 		return pbv1.ErrorInvalidArgument("至少需要一条消息")
 	}
 
-	// 3. 构建请求
-	chatReq := ChatCompletionRequest{
-		Model:    req.GetModel(),
-		Messages: msgs,
-		Stream:   true,
+	s.log.Debugw("msg", "消息转换完成", "count", len(msgs))
+
+	// 3. 构建请求 - 使用简洁模式
+	chatReq := perplexity.ChatCompletionRequest{
+		Model:      req.GetModel(),
+		Messages:   msgs,
+		Stream:     true,
+		StreamMode: "concise", // 使用简洁模式
 	}
 
 	if req.Temperature != nil {
@@ -196,9 +227,9 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 		s.log.Errorw("msg", "HTTP 请求失败", "error", err)
 		return pbv1.ErrorUpstreamApiError("API 请求失败: %s", err.Error())
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
 		s.log.Errorw("msg", "API 返回错误状态码", "status", resp.StatusCode)
 		return pbv1.ErrorUpstreamApiError("API 返回错误状态码: %d", resp.StatusCode)
 	}
@@ -207,163 +238,30 @@ func (s *PerplexityService) StreamChatCompletions(req *pbv1.StreamChatCompletion
 
 	// 7. 使用 ssestream 处理流式响应
 	decoder := ssestream.NewDecoder(resp)
-	stream := ssestream.NewStream[ChatCompletionChunk](decoder, nil)
+	stream := ssestream.NewStream[perplexity.ConciseChunk](decoder, nil)
 	defer stream.Close()
 
-	// 8. 使用状态机处理流式响应
-	inThinking := false
-	var buffer strings.Builder // 缓冲区，用于处理跨chunk的标签
-
+	// 8. 处理流式响应
 	for stream.Next() {
 		chunk := stream.Current()
 
-		// 记录 usage 信息（仅用于日志）
-		if chunk.Usage != nil {
-			s.log.Debugw("msg", "收到 usage 信息", "usage", chunk.Usage)
+		s.log.Debugw("msg", "收到 chunk", "type", chunk.Object, "id", chunk.ID)
+
+		// 处理 chunk 并转换为 proto 格式
+		pbResp, err := s.processChunk(&chunk)
+		if err != nil {
+			s.log.Errorw("msg", "处理 chunk 失败", "error", err, "type", chunk.Object)
+			return pbv1.ErrorUpstreamApiError("chunk 处理错误: %s", err.Error())
 		}
 
-		// 准备元数据（citations 和 search_results）
-		var citations []string
-		var searchResults []*pbv1.SearchResult
-
-		if chunk.Citations != nil {
-			citations = chunk.Citations
-		}
-
-		if chunk.SearchResults != nil {
-			searchResults = make([]*pbv1.SearchResult, 0, len(chunk.SearchResults))
-			for _, sr := range chunk.SearchResults {
-				pbSr := &pbv1.SearchResult{
-					Title:       sr.Title,
-					Url:         sr.URL,
-					Date:        nil,
-					LastUpdated: nil,
-					Snippet:     sr.Snippet,
-					Source:      sr.Source,
-				}
-				if sr.Date != "" {
-					pbSr.Date = &sr.Date
-				}
-				if sr.LastUpdated != "" {
-					pbSr.LastUpdated = &sr.LastUpdated
-				}
-				searchResults = append(searchResults, pbSr)
-			}
-		}
-
-		if len(chunk.Choices) == 0 {
+		// 如果没有需要发送的内容（空 chunk），跳过
+		if pbResp == nil {
 			continue
 		}
 
-		// 获取增量内容
-		deltaContent := chunk.Choices[0].Delta.Content
-		if deltaContent == "" {
-			continue
-		}
-
-		s.log.Debugw("msg", "收到增量内容", "length", len(deltaContent), "in_thinking", inThinking)
-
-		// 将缓冲区内容与当前chunk合并处理
-		if buffer.Len() > 0 {
-			deltaContent = buffer.String() + deltaContent
-			buffer.Reset()
-		}
-
-		// 状态机：逐字符处理以检测 <think> 和 </think> 标签
-		var reasoningBuf strings.Builder
-		var messageBuf strings.Builder
-
-		i := 0
-		for i < len(deltaContent) {
-			// 检查 <think> 标签
-			if !inThinking && strings.HasPrefix(deltaContent[i:], "<think>") {
-				inThinking = true
-				i += len("<think>")
-				s.log.Debugw("msg", "进入思考模式")
-				continue
-			}
-
-			// 检查 </think> 标签
-			if inThinking && strings.HasPrefix(deltaContent[i:], "</think>") {
-				inThinking = false
-				i += len("</think>")
-				s.log.Debugw("msg", "退出思考模式")
-				continue
-			}
-
-			// 检查是否接近chunk末尾，且可能有部分标签
-			remaining := deltaContent[i:]
-			if len(remaining) < 8 { // </think> 最长8字符
-				// 检查是否是标签的部分前缀
-				if s.isPotentialTagPrefix(remaining, inThinking) {
-					// 保存到缓冲区，等待下一个chunk
-					buffer.WriteString(remaining)
-					s.log.Debugw("msg", "检测到可能的部分标签，保存到缓冲区", "buffer", remaining)
-					break
-				}
-			}
-
-			// 根据当前状态累积内容
-			if inThinking {
-				reasoningBuf.WriteByte(deltaContent[i])
-			} else {
-				messageBuf.WriteByte(deltaContent[i])
-			}
-			i++
-		}
-
-		// 发送推理块（带元数据）
-		if reasoningBuf.Len() > 0 {
-			if err := conn.Send(&pbv1.StreamChatCompletionsResponse{
-				Content: &pbv1.StreamChatCompletionsResponse_ReasoningChunk{
-					ReasoningChunk: reasoningBuf.String(),
-				},
-				Citations:     citations,
-				SearchResults: searchResults,
-			}); err != nil {
-				s.log.Errorw("msg", "发送推理块失败", "error", err)
-				return pbv1.ErrorUpstreamApiError("流发送错误: %s", err.Error())
-			}
-		}
-
-		// 发送消息块（带元数据）
-		if messageBuf.Len() > 0 {
-			if err := conn.Send(&pbv1.StreamChatCompletionsResponse{
-				Content: &pbv1.StreamChatCompletionsResponse_MessageChunk{
-					MessageChunk: messageBuf.String(),
-				},
-				Citations:     citations,
-				SearchResults: searchResults,
-			}); err != nil {
-				s.log.Errorw("msg", "发送消息块失败", "error", err)
-				return pbv1.ErrorUpstreamApiError("流发送错误: %s", err.Error())
-			}
-		}
-	}
-
-	// 处理缓冲区中剩余的内容（如果有）
-	if buffer.Len() > 0 {
-		remaining := buffer.String()
-		s.log.Debugw("msg", "处理缓冲区剩余内容", "content", remaining)
-
-		// 将剩余内容作为普通文本发送
-		var resp *pbv1.StreamChatCompletionsResponse
-		if inThinking {
-			resp = &pbv1.StreamChatCompletionsResponse{
-				Content: &pbv1.StreamChatCompletionsResponse_ReasoningChunk{
-					ReasoningChunk: remaining,
-				},
-			}
-		} else {
-			resp = &pbv1.StreamChatCompletionsResponse{
-				Content: &pbv1.StreamChatCompletionsResponse_MessageChunk{
-					MessageChunk: remaining,
-				},
-			}
-		}
-
-		if err := conn.Send(resp); err != nil {
-			s.log.Errorw("msg", "发送缓冲区内容失败", "error", err)
+		// 发送到客户端
+		if err := conn.Send(pbResp); err != nil {
+			s.log.Errorw("msg", "发送响应失败", "error", err)
 			return pbv1.ErrorUpstreamApiError("流发送错误: %s", err.Error())
 		}
 	}

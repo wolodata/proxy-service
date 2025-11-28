@@ -162,7 +162,10 @@ func (s *Stream[T]) Next() bool {
 				s.err = fmt.Errorf("received error while streaming: %s", ep.String())
 				return false
 			}
-			s.err = json.Unmarshal(s.decoder.Event().Data, &nxt)
+			// 使用 decoder 并启用 DisallowUnknownFields
+			dec := json.NewDecoder(bytes.NewReader(s.decoder.Event().Data))
+			dec.DisallowUnknownFields()
+			s.err = dec.Decode(&nxt)
 			if s.err != nil {
 				return false
 			}
@@ -176,7 +179,11 @@ func (s *Stream[T]) Next() bool {
 			}
 			event := s.decoder.Event().Type
 			data := s.decoder.Event().Data
-			s.err = json.Unmarshal([]byte(fmt.Sprintf(`{ "event": %q, "data": %s }`, event, data)), &nxt)
+			// 使用 decoder 并启用 DisallowUnknownFields
+			wrappedData := []byte(fmt.Sprintf(`{ "event": %q, "data": %s }`, event, data))
+			dec := json.NewDecoder(bytes.NewReader(wrappedData))
+			dec.DisallowUnknownFields()
+			s.err = dec.Decode(&nxt)
 			if s.err != nil {
 				return false
 			}

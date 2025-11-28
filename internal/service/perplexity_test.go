@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/wolodata/proxy-service/internal/client/perplexity"
+	"github.com/wolodata/proxy-service/internal/converter"
 	"github.com/wolodata/proxy-service/internal/ssestream"
 )
 
@@ -20,20 +21,462 @@ const (
 
 var apiKey = os.Getenv("PERPLEXITY_API_KEY") // 从环境变量读取
 
-// 测试实际响应结构
-func TestActualResponseStructure(t *testing.T) {
+// TestConciseModeChunkTypes 测试简洁模式的 4 个 chunk 类型
+func TestConciseModeChunkTypes(t *testing.T) {
 	if apiKey == "" {
 		t.Skip("跳过：需要设置 PERPLEXITY_API_KEY 环境变量")
 	}
 
-	t.Log("测试实际 API 响应结构")
+	t.Log("测试简洁模式的 chunk 类型")
 
-	req := ChatCompletionRequest{
-		Model: "sonar",
-		Messages: []Message{
-			{Role: "user", Content: "Hello"},
+	req := perplexity.ChatCompletionRequest{
+		Model: "sonar-pro",
+		Messages: []perplexity.Message{
+			{Role: "user", Content: "What is artificial intelligence?"},
 		},
-		Stream: true,
+		Stream:     true,
+		StreamMode: "concise",
+	}
+
+	chunks, err := callPerplexityConciseStream(req)
+	if err != nil {
+		t.Fatalf("请求失败: %v", err)
+	}
+
+	if len(chunks) == 0 {
+		t.Fatal("未收到任何响应块")
+	}
+
+	t.Logf("收到 %d 个响应块", len(chunks))
+
+	// 统计各类型 chunk
+	chunkTypes := make(map[string]int)
+	for _, chunk := range chunks {
+		chunkTypes[chunk.Object]++
+	}
+
+	t.Logf("Chunk 类型分布: %+v", chunkTypes)
+
+	// 验证至少收到了 completion.chunk 和 completion.done
+	if chunkTypes["chat.completion.chunk"] == 0 {
+		t.Error("未收到 chat.completion.chunk")
+	}
+	if chunkTypes["chat.completion.done"] == 0 {
+		t.Error("未收到 chat.completion.done")
+	}
+}
+
+// TestReasoningChunkProcessing 测试推理 chunk 的处理
+func TestReasoningChunkProcessing(t *testing.T) {
+	service := &PerplexityService{}
+
+	chunk := &perplexity.ConciseChunk{
+		ID:      "test-id",
+		Object:  "chat.reasoning",
+		Model:   "sonar-pro",
+		Created: time.Now().Unix(),
+		Choices: []perplexity.ConciseChoice{
+			{
+				Delta: &perplexity.ConciseDelta{
+					ReasoningSteps: []perplexity.ReasoningStep{
+						{
+							Thought: "Let me search for information",
+							Type:    "web_search",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := service.handleReasoning(chunk)
+	if err != nil {
+		t.Fatalf("处理失败: %v", err)
+	}
+
+	if resp == nil {
+		t.Fatal("响应为 nil")
+	}
+
+	reasoning := resp.GetReasoning()
+	if reasoning == nil {
+		t.Fatal("未返回 reasoning chunk")
+	}
+
+	if reasoning.Id != "test-id" {
+		t.Errorf("ID 不匹配: got %s, want test-id", reasoning.Id)
+	}
+
+	if len(reasoning.ReasoningSteps) != 1 {
+		t.Errorf("ReasoningSteps 数量不匹配: got %d, want 1", len(reasoning.ReasoningSteps))
+	}
+
+	if reasoning.ReasoningSteps[0].Thought != "Let me search for information" {
+		t.Errorf("Thought 内容不匹配: got %s", reasoning.ReasoningSteps[0].Thought)
+	}
+}
+
+// TestReasoningDoneChunkProcessing 测试推理完成 chunk 的处理
+func TestReasoningDoneChunkProcessing(t *testing.T) {
+	service := &PerplexityService{}
+
+	chunk := &perplexity.ConciseChunk{
+		ID:      "test-id",
+		Object:  "chat.reasoning.done",
+		Model:   "sonar-pro",
+		Created: time.Now().Unix(),
+		SearchResults: []perplexity.SearchResult{
+			{
+				Title:   "Test Article",
+				URL:     "https://example.com",
+				Snippet: "Test snippet",
+				Source:  "Example",
+			},
+		},
+		Images: []perplexity.ImageResult{
+			{
+				URL:   "https://example.com/image.jpg",
+				Title: "Test Image",
+			},
+		},
+		Choices: []perplexity.ConciseChoice{
+			{
+				Message: &perplexity.ConciseMessage{
+					ReasoningSteps: []perplexity.ReasoningStep{
+						{
+							Thought: "Complete reasoning",
+							Type:    "summary",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := service.handleReasoningDone(chunk)
+	if err != nil {
+		t.Fatalf("处理失败: %v", err)
+	}
+
+	if resp == nil {
+		t.Fatal("响应为 nil")
+	}
+
+	reasoningDone := resp.GetReasoningDone()
+	if reasoningDone == nil {
+		t.Fatal("未返回 reasoning_done chunk")
+	}
+
+	if len(reasoningDone.SearchResults) != 1 {
+		t.Errorf("SearchResults 数量不匹配: got %d, want 1", len(reasoningDone.SearchResults))
+	}
+
+	if len(reasoningDone.Images) != 1 {
+		t.Errorf("Images 数量不匹配: got %d, want 1", len(reasoningDone.Images))
+	}
+
+	if len(reasoningDone.ReasoningSteps) != 1 {
+		t.Errorf("ReasoningSteps 数量不匹配: got %d, want 1", len(reasoningDone.ReasoningSteps))
+	}
+}
+
+// TestCompletionChunkProcessing 测试内容生成 chunk 的处理
+func TestCompletionChunkProcessing(t *testing.T) {
+	service := &PerplexityService{}
+
+	content := "Hello, this is a test response."
+	chunk := &perplexity.ConciseChunk{
+		ID:      "test-id",
+		Object:  "chat.completion.chunk",
+		Model:   "sonar-pro",
+		Created: time.Now().Unix(),
+		Choices: []perplexity.ConciseChoice{
+			{
+				Delta: &perplexity.ConciseDelta{
+					Content: content,
+				},
+			},
+		},
+	}
+
+	resp, err := service.handleCompletionChunk(chunk)
+	if err != nil {
+		t.Fatalf("处理失败: %v", err)
+	}
+
+	if resp == nil {
+		t.Fatal("响应为 nil")
+	}
+
+	completion := resp.GetCompletion()
+	if completion == nil {
+		t.Fatal("未返回 completion chunk")
+	}
+
+	if completion.Content == nil || *completion.Content != content {
+		t.Errorf("Content 不匹配: got %v, want %s", completion.Content, content)
+	}
+}
+
+// TestCompletionDoneChunkProcessing 测试内容完成 chunk 的处理
+func TestCompletionDoneChunkProcessing(t *testing.T) {
+	service := &PerplexityService{}
+
+	fullContent := "This is the complete response."
+	chunk := &perplexity.ConciseChunk{
+		ID:      "test-id",
+		Object:  "chat.completion.done",
+		Model:   "sonar-pro",
+		Created: time.Now().Unix(),
+		SearchResults: []perplexity.SearchResult{
+			{
+				Title:   "Final Article",
+				URL:     "https://example.com/final",
+				Snippet: "Final snippet",
+				Source:  "Example",
+			},
+		},
+		Usage: &perplexity.Usage{
+			PromptTokens:     10,
+			CompletionTokens: 20,
+			TotalTokens:      30,
+			Cost: &perplexity.Cost{
+				InputTokensCost:  0.001,
+				OutputTokensCost: 0.002,
+				RequestCost:      0.003,
+			},
+		},
+		Choices: []perplexity.ConciseChoice{
+			{
+				Message: &perplexity.ConciseMessage{
+					Content: fullContent,
+				},
+			},
+		},
+	}
+
+	resp, err := service.handleCompletionDone(chunk)
+	if err != nil {
+		t.Fatalf("处理失败: %v", err)
+	}
+
+	if resp == nil {
+		t.Fatal("响应为 nil")
+	}
+
+	completionDone := resp.GetCompletionDone()
+	if completionDone == nil {
+		t.Fatal("未返回 completion_done chunk")
+	}
+
+	if completionDone.Content == nil || *completionDone.Content != fullContent {
+		t.Errorf("Content 不匹配: got %v, want %s", completionDone.Content, fullContent)
+	}
+
+	if completionDone.Usage == nil {
+		t.Fatal("Usage 为 nil")
+	}
+
+	if *completionDone.Usage.TotalTokens != 30 {
+		t.Errorf("TotalTokens 不匹配: got %d, want 30", *completionDone.Usage.TotalTokens)
+	}
+
+	if completionDone.Usage.RequestCost == nil || *completionDone.Usage.RequestCost != 0.003 {
+		t.Errorf("RequestCost 不匹配: got %v, want 0.003", completionDone.Usage.RequestCost)
+	}
+
+	if len(completionDone.SearchResults) != 1 {
+		t.Errorf("SearchResults 数量不匹配: got %d, want 1", len(completionDone.SearchResults))
+	}
+}
+
+// TestConverterSearchResults 测试搜索结果转换
+func TestConverterSearchResults(t *testing.T) {
+	input := []perplexity.SearchResult{
+		{
+			Title:       "Test Article",
+			URL:         "https://example.com",
+			Date:        "2024-01-01",
+			LastUpdated: "2024-01-02",
+			Snippet:     "Test snippet",
+			Source:      "Example",
+		},
+	}
+
+	output := converter.ConvertSearchResults(input)
+
+	if len(output) != 1 {
+		t.Fatalf("输出长度不匹配: got %d, want 1", len(output))
+	}
+
+	if output[0].Title != "Test Article" {
+		t.Errorf("Title 不匹配: got %s, want Test Article", output[0].Title)
+	}
+
+	if output[0].Date == nil || *output[0].Date != "2024-01-01" {
+		t.Errorf("Date 不匹配: got %v, want 2024-01-01", output[0].Date)
+	}
+}
+
+// TestConverterUsage 测试使用统计转换
+func TestConverterUsage(t *testing.T) {
+	input := &perplexity.Usage{
+		PromptTokens:      100,
+		CompletionTokens:  200,
+		TotalTokens:       300,
+		SearchContextSize: 50,
+		Cost: &perplexity.Cost{
+			InputTokensCost:  0.01,
+			OutputTokensCost: 0.02,
+			RequestCost:      0.03,
+		},
+	}
+
+	output := converter.ConvertUsage(input)
+
+	if output == nil {
+		t.Fatal("输出为 nil")
+	}
+
+	if *output.PromptTokens != 100 {
+		t.Errorf("PromptTokens 不匹配: got %d, want 100", *output.PromptTokens)
+	}
+
+	if *output.TotalTokens != 300 {
+		t.Errorf("TotalTokens 不匹配: got %d, want 300", *output.TotalTokens)
+	}
+
+	if output.RequestCost == nil || *output.RequestCost != 0.03 {
+		t.Errorf("RequestCost 不匹配: got %v, want 0.03", output.RequestCost)
+	}
+}
+
+// TestProcessChunkRouting 测试 chunk 路由
+func TestProcessChunkRouting(t *testing.T) {
+	service := &PerplexityService{}
+
+	testCases := []struct {
+		name       string
+		chunkType  string
+		wantType   string
+		shouldFail bool
+	}{
+		{
+			name:      "reasoning chunk",
+			chunkType: "chat.reasoning",
+			wantType:  "reasoning",
+		},
+		{
+			name:      "reasoning.done chunk",
+			chunkType: "chat.reasoning.done",
+			wantType:  "reasoning_done",
+		},
+		{
+			name:      "completion.chunk",
+			chunkType: "chat.completion.chunk",
+			wantType:  "completion",
+		},
+		{
+			name:      "completion.done",
+			chunkType: "chat.completion.done",
+			wantType:  "completion_done",
+		},
+		{
+			name:       "unknown type",
+			chunkType:  "chat.unknown",
+			wantType:   "",
+			shouldFail: false, // 返回 nil, 不报错
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			chunk := &perplexity.ConciseChunk{
+				ID:      "test-id",
+				Object:  tc.chunkType,
+				Model:   "sonar-pro",
+				Created: time.Now().Unix(),
+			}
+
+			// 根据类型添加必要的数据
+			switch tc.chunkType {
+			case "chat.reasoning":
+				chunk.Choices = []perplexity.ConciseChoice{
+					{Delta: &perplexity.ConciseDelta{
+						ReasoningSteps: []perplexity.ReasoningStep{{Thought: "test"}},
+					}},
+				}
+			case "chat.reasoning.done":
+				chunk.Choices = []perplexity.ConciseChoice{
+					{Message: &perplexity.ConciseMessage{}},
+				}
+			case "chat.completion.chunk":
+				chunk.Choices = []perplexity.ConciseChoice{
+					{Delta: &perplexity.ConciseDelta{Content: "test"}},
+				}
+			case "chat.completion.done":
+				chunk.Choices = []perplexity.ConciseChoice{
+					{Message: &perplexity.ConciseMessage{Content: "test"}},
+				}
+			}
+
+			resp, err := service.processChunk(chunk)
+
+			if tc.shouldFail && err == nil {
+				t.Error("期望失败但成功了")
+			}
+			if !tc.shouldFail && err != nil {
+				t.Errorf("不期望失败但失败了: %v", err)
+			}
+
+			if tc.wantType != "" && resp == nil {
+				t.Error("期望返回响应但得到 nil")
+			}
+
+			if tc.wantType == "" && resp != nil {
+				t.Error("期望返回 nil 但得到响应")
+			}
+
+			// 验证返回的类型
+			if resp != nil {
+				switch tc.wantType {
+				case "reasoning":
+					if resp.GetReasoning() == nil {
+						t.Error("期望 reasoning chunk")
+					}
+				case "reasoning_done":
+					if resp.GetReasoningDone() == nil {
+						t.Error("期望 reasoning_done chunk")
+					}
+				case "completion":
+					if resp.GetCompletion() == nil {
+						t.Error("期望 completion chunk")
+					}
+				case "completion_done":
+					if resp.GetCompletionDone() == nil {
+						t.Error("期望 completion_done chunk")
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestActualConciseMode 测试实际的简洁模式 API 响应
+func TestActualConciseMode(t *testing.T) {
+	if apiKey == "" {
+		t.Skip("跳过：需要设置 PERPLEXITY_API_KEY 环境变量")
+	}
+
+	t.Log("测试实际简洁模式 API")
+
+	req := perplexity.ChatCompletionRequest{
+		Model: "sonar-pro",
+		Messages: []perplexity.Message{
+			{Role: "user", Content: "What is the capital of France?"},
+		},
+		Stream:     true,
+		StreamMode: "concise",
 	}
 
 	reqBody, _ := json.Marshal(req)
@@ -52,417 +495,71 @@ func TestActualResponseStructure(t *testing.T) {
 	defer resp.Body.Close()
 
 	decoder := ssestream.NewDecoder(resp)
+	stream := ssestream.NewStream[perplexity.ConciseChunk](decoder, nil)
+	defer stream.Close()
 
 	chunkCount := 0
-	for decoder.Next() {
-		event := decoder.Event()
+	var hasCompletion, hasCompletionDone bool
+
+	for stream.Next() {
+		chunk := stream.Current()
 		chunkCount++
 
-		// 打印前3个响应块的完整 JSON
-		if chunkCount <= 3 {
-			t.Logf("\n=== 响应块 #%d ===", chunkCount)
-			t.Logf("事件类型: %s", event.Type)
+		t.Logf("收到 chunk #%d, type: %s, id: %s", chunkCount, chunk.Object, chunk.ID)
 
-			// 格式化 JSON 输出
-			var prettyJSON bytes.Buffer
-			if err := json.Indent(&prettyJSON, event.Data, "", "  "); err == nil {
-				t.Logf("数据:\n%s", prettyJSON.String())
-			} else {
-				t.Logf("原始数据: %s", string(event.Data))
+		switch chunk.Object {
+		case "chat.reasoning":
+			if len(chunk.Choices) > 0 && chunk.Choices[0].Delta != nil {
+				t.Logf("  推理步骤数: %d", len(chunk.Choices[0].Delta.ReasoningSteps))
+			}
+		case "chat.reasoning.done":
+			t.Logf("  搜索结果数: %d", len(chunk.SearchResults))
+			t.Logf("  图片数: %d", len(chunk.Images))
+		case "chat.completion.chunk":
+			hasCompletion = true
+			if len(chunk.Choices) > 0 && chunk.Choices[0].Delta != nil {
+				t.Logf("  内容长度: %d", len(chunk.Choices[0].Delta.Content))
+			}
+		case "chat.completion.done":
+			hasCompletionDone = true
+			if chunk.Usage != nil {
+				t.Logf("  Token 使用: %d (prompt) + %d (completion) = %d (total)",
+					chunk.Usage.PromptTokens,
+					chunk.Usage.CompletionTokens,
+					chunk.Usage.TotalTokens)
+				if chunk.Usage.Cost != nil {
+					t.Logf("  成本: $%.6f", chunk.Usage.Cost.RequestCost)
+				}
 			}
 		}
 
-		if chunkCount >= 3 {
+		if chunkCount >= 10 {
 			break
 		}
 	}
 
-	if err := decoder.Err(); err != nil {
-		t.Fatalf("解码错误: %v", err)
+	if err := stream.Err(); err != nil {
+		t.Fatalf("流错误: %v", err)
 	}
+
+	if !hasCompletion {
+		t.Error("未收到 chat.completion.chunk")
+	}
+	if !hasCompletionDone {
+		t.Error("未收到 chat.completion.done")
+	}
+
+	t.Logf("总共收到 %d 个 chunk", chunkCount)
 }
 
-// 测试 sonar 模型的流式响应
-func TestStreamingSonar(t *testing.T) {
-	if apiKey == "" {
-		t.Skip("跳过：需要设置 PERPLEXITY_API_KEY 环境变量")
-	}
-
-	t.Log("开始测试 sonar 模型")
-
-	req := ChatCompletionRequest{
-		Model: "sonar",
-		Messages: []Message{
-			{Role: "user", Content: "What is the capital of France?"},
-		},
-		Stream: true,
-	}
-
-	chunks, err := callPerplexityStream(req)
-	if err != nil {
-		t.Fatalf("请求失败: %v", err)
-	}
-
-	if len(chunks) == 0 {
-		t.Fatal("未收到任何响应块")
-	}
-
-	t.Logf("收到 %d 个响应块", len(chunks))
-
-	// 拼接完整内容
-	var fullContent strings.Builder
-	for _, chunk := range chunks {
-		fullContent.WriteString(chunk)
-	}
-
-	content := fullContent.String()
-	t.Logf("完整响应: %s", content)
-
-	if content == "" {
-		t.Fatal("响应内容为空")
-	}
-
-	// sonar 模型通常不包含 <think> 标签
-	if strings.Contains(content, "<think>") {
-		t.Log("警告: sonar 模型包含 <think> 标签，这通常不应该发生")
-	}
-}
-
-// 测试 sonar-deep-research 模型的流式响应（包含 reasoning）
-func TestStreamingSonarDeepResearch(t *testing.T) {
-	if apiKey == "" {
-		t.Skip("跳过：需要设置 PERPLEXITY_API_KEY 环境变量")
-	}
-
-	t.Log("开始测试 sonar-deep-research 模型")
-
-	req := ChatCompletionRequest{
-		Model: "sonar-deep-research",
-		Messages: []Message{
-			{Role: "user", Content: "Explain quantum computing in simple terms"},
-		},
-		Stream: true,
-	}
-
-	chunks, err := callPerplexityStream(req)
-	if err != nil {
-		t.Fatalf("请求失败: %v", err)
-	}
-
-	if len(chunks) == 0 {
-		t.Fatal("未收到任何响应块")
-	}
-
-	t.Logf("收到 %d 个响应块", len(chunks))
-
-	// 拼接完整内容
-	var fullContent strings.Builder
-	for _, chunk := range chunks {
-		fullContent.WriteString(chunk)
-	}
-
-	content := fullContent.String()
-	t.Logf("完整响应长度: %d", len(content))
-
-	if content == "" {
-		t.Fatal("响应内容为空")
-	}
-
-	// deep-research 模型可能包含 <think> 标签
-	if strings.Contains(content, "<think>") {
-		t.Log("检测到 <think> 标签，模型在进行推理")
-	}
-}
-
-// 测试 <think> 标签解析
-func TestThinkTagParsing(t *testing.T) {
-	t.Log("测试 <think> 标签解析逻辑")
-
-	testCases := []struct {
-		name     string
-		input    string
-		wantMsg  string
-		wantReas string
-	}{
-		{
-			name:     "无标签",
-			input:    "Hello world",
-			wantMsg:  "Hello world",
-			wantReas: "",
-		},
-		{
-			name:     "完整的 think 标签",
-			input:    "Before<think>thinking</think>After",
-			wantMsg:  "BeforeAfter",
-			wantReas: "thinking",
-		},
-		{
-			name:     "多个 think 标签",
-			input:    "A<think>T1</think>B<think>T2</think>C",
-			wantMsg:  "ABC",
-			wantReas: "T1T2",
-		},
-		{
-			name:     "只有 think 标签",
-			input:    "<think>only thinking</think>",
-			wantMsg:  "",
-			wantReas: "only thinking",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var reasoningBuf, messageBuf strings.Builder
-			inThinking := false
-
-			for i := 0; i < len(tc.input); {
-				if !inThinking && strings.HasPrefix(tc.input[i:], "<think>") {
-					inThinking = true
-					i += len("<think>")
-					continue
-				}
-
-				if inThinking && strings.HasPrefix(tc.input[i:], "</think>") {
-					inThinking = false
-					i += len("</think>")
-					continue
-				}
-
-				if inThinking {
-					reasoningBuf.WriteByte(tc.input[i])
-				} else {
-					messageBuf.WriteByte(tc.input[i])
-				}
-				i++
-			}
-
-			gotMsg := messageBuf.String()
-			gotReas := reasoningBuf.String()
-
-			if gotMsg != tc.wantMsg {
-				t.Errorf("消息内容不匹配:\n  期望: %q\n  实际: %q", tc.wantMsg, gotMsg)
-			}
-
-			if gotReas != tc.wantReas {
-				t.Errorf("推理内容不匹配:\n  期望: %q\n  实际: %q", tc.wantReas, gotReas)
-			}
-		})
-	}
-}
-
-// 测试跨 chunk 的标签分割情况
-func TestThinkTagSplitAcrossChunks(t *testing.T) {
-	t.Log("测试标签跨 chunk 分割的边界情况")
-
-	service := &PerplexityService{}
-
-	testCases := []struct {
-		name     string
-		chunks   []string // 模拟多个 chunk
-		wantMsg  string
-		wantReas string
-	}{
-		{
-			name:     "标签在 chunk 边界完整",
-			chunks:   []string{"Hello <think>", "thinking", "</think> world"},
-			wantMsg:  "Hello  world",
-			wantReas: "thinking",
-		},
-		{
-			name:     "开始标签被分割 <thi|nk>",
-			chunks:   []string{"Hello <thi", "nk>thinking</think> world"},
-			wantMsg:  "Hello  world",
-			wantReas: "thinking",
-		},
-		{
-			name:     "结束标签被分割 </thi|nk>",
-			chunks:   []string{"Hello <think>thinking</thi", "nk> world"},
-			wantMsg:  "Hello  world",
-			wantReas: "thinking",
-		},
-		{
-			name:     "标签分割成多个部分 <|th|in|k>",
-			chunks:   []string{"Hello <", "th", "in", "k>thinking</", "th", "in", "k> world"},
-			wantMsg:  "Hello  world",
-			wantReas: "thinking",
-		},
-		{
-			name:     "标签完全在单个 chunk 中",
-			chunks:   []string{"Hello <think>thinking</think> world"},
-			wantMsg:  "Hello  world",
-			wantReas: "thinking",
-		},
-		{
-			name:     "多个 think 标签跨 chunk",
-			chunks:   []string{"A<thi", "nk>R1</think>B<think>R", "2</think>C"},
-			wantMsg:  "ABC",
-			wantReas: "R1R2",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var reasoningBuf, messageBuf strings.Builder
-			inThinking := false
-			var buffer strings.Builder
-
-			// 模拟流式处理多个 chunk
-			for _, deltaContent := range tc.chunks {
-				// 将缓冲区内容与当前chunk合并
-				if buffer.Len() > 0 {
-					deltaContent = buffer.String() + deltaContent
-					buffer.Reset()
-				}
-
-				i := 0
-				for i < len(deltaContent) {
-					if !inThinking && strings.HasPrefix(deltaContent[i:], "<think>") {
-						inThinking = true
-						i += len("<think>")
-						continue
-					}
-
-					if inThinking && strings.HasPrefix(deltaContent[i:], "</think>") {
-						inThinking = false
-						i += len("</think>")
-						continue
-					}
-
-					// 检查是否接近chunk末尾，且可能有部分标签
-					remaining := deltaContent[i:]
-					if len(remaining) < 8 {
-						if service.isPotentialTagPrefix(remaining, inThinking) {
-							buffer.WriteString(remaining)
-							break
-						}
-					}
-
-					if inThinking {
-						reasoningBuf.WriteByte(deltaContent[i])
-					} else {
-						messageBuf.WriteByte(deltaContent[i])
-					}
-					i++
-				}
-			}
-
-			// 处理缓冲区剩余内容
-			if buffer.Len() > 0 {
-				remaining := buffer.String()
-				if inThinking {
-					reasoningBuf.WriteString(remaining)
-				} else {
-					messageBuf.WriteString(remaining)
-				}
-			}
-
-			gotMsg := messageBuf.String()
-			gotReas := reasoningBuf.String()
-
-			if gotMsg != tc.wantMsg {
-				t.Errorf("消息内容不匹配:\n  期望: %q\n  实际: %q", tc.wantMsg, gotMsg)
-			}
-
-			if gotReas != tc.wantReas {
-				t.Errorf("推理内容不匹配:\n  期望: %q\n  实际: %q", tc.wantReas, gotReas)
-			}
-		})
-	}
-}
-
-// 测试温度和 top_p 参数
-func TestStreamingWithParameters(t *testing.T) {
-	if apiKey == "" {
-		t.Skip("跳过：需要设置 PERPLEXITY_API_KEY 环境变量")
-	}
-
-	t.Log("测试带参数的流式请求")
-
-	temp := 0.7
-	topP := 0.9
-
-	req := ChatCompletionRequest{
-		Model: "sonar",
-		Messages: []Message{
-			{Role: "user", Content: "Say hello"},
-		},
-		Stream:      true,
-		Temperature: &temp,
-		TopP:        &topP,
-	}
-
-	chunks, err := callPerplexityStream(req)
-	if err != nil {
-		t.Fatalf("请求失败: %v", err)
-	}
-
-	if len(chunks) == 0 {
-		t.Fatal("未收到任何响应块")
-	}
-
-	t.Logf("成功收到 %d 个响应块", len(chunks))
-}
-
-// extractThinkBlocks 提取所有 <think>...</think> 块的内容
-func extractThinkBlocks(content string) []string {
-	var blocks []string
-	for {
-		startIdx := strings.Index(content, "<think>")
-		if startIdx == -1 {
-			break
-		}
-
-		endIdx := strings.Index(content[startIdx:], "</think>")
-		if endIdx == -1 {
-			break
-		}
-
-		// 提取 <think> 和 </think> 之间的内容
-		thinkContent := content[startIdx+len("<think>") : startIdx+endIdx]
-		blocks = append(blocks, thinkContent)
-
-		// 移动到下一个可能的 <think> 标签
-		content = content[startIdx+endIdx+len("</think>"):]
-	}
-	return blocks
-}
-
-// removeThinkBlocks 移除所有 <think>...</think> 块
-func removeThinkBlocks(content string) string {
-	result := content
-	for {
-		startIdx := strings.Index(result, "<think>")
-		if startIdx == -1 {
-			break
-		}
-
-		endIdx := strings.Index(result[startIdx:], "</think>")
-		if endIdx == -1 {
-			break
-		}
-
-		// 移除整个 <think>...</think> 块
-		result = result[:startIdx] + result[startIdx+endIdx+len("</think>"):]
-	}
-	return result
-}
-
-// 辅助函数：调用 Perplexity API 并返回所有响应块
-func callPerplexityStream(req ChatCompletionRequest) ([]string, error) {
-	// 序列化请求
+// 辅助函数：调用 Perplexity 简洁模式 API
+func callPerplexityConciseStream(req perplexity.ChatCompletionRequest) ([]perplexity.ConciseChunk, error) {
 	reqBody, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("序列化请求失败: %w", err)
 	}
 
-	// 为 deep-research 模型设置更长的超时时间
-	timeout := 60 * time.Second
-	if req.Model == "sonar-deep-research" {
-		timeout = 180 * time.Second // 3分钟
-	}
-
-	// 创建 HTTP 请求
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", perplexityURL, bytes.NewReader(reqBody))
@@ -474,7 +571,6 @@ func callPerplexityStream(req ChatCompletionRequest) ([]string, error) {
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
 
-	// 发送请求
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP 请求失败: %w", err)
@@ -485,24 +581,15 @@ func callPerplexityStream(req ChatCompletionRequest) ([]string, error) {
 		return nil, fmt.Errorf("API 返回错误状态码: %d", resp.StatusCode)
 	}
 
-	// 使用 ssestream 解析流式响应
 	decoder := ssestream.NewDecoder(resp)
-	stream := ssestream.NewStream[ChatCompletionChunk](decoder, nil)
+	stream := ssestream.NewStream[perplexity.ConciseChunk](decoder, nil)
 	defer stream.Close()
 
-	var chunks []string
+	var chunks []perplexity.ConciseChunk
 
 	for stream.Next() {
 		chunk := stream.Current()
-
-		if len(chunk.Choices) == 0 {
-			continue
-		}
-
-		deltaContent := chunk.Choices[0].Delta.Content
-		if deltaContent != "" {
-			chunks = append(chunks, deltaContent)
-		}
+		chunks = append(chunks, chunk)
 	}
 
 	if err := stream.Err(); err != nil {

@@ -23,6 +23,23 @@ service Perplexity {
   rpc StreamChatCompletions(StreamChatCompletionsRequest) returns (stream StreamChatCompletionsResponse) {}
 }
 
+message StreamChatCompletionsRequest {
+  string model = 1;
+  string token = 2;
+  optional double temperature = 3;
+  optional double top_p = 4;
+  repeated Message messages = 5;
+}
+
+message StreamChatCompletionsResponse {
+  oneof data {
+    ReasoningChunk reasoning = 1;
+    ReasoningDoneChunk reasoning_done = 2;
+    CompletionChunk completion = 3;
+    CompletionDoneChunk completion_done = 4;
+  }
+}
+
 enum MessageRole {
   CHAT_COMPLETION_MESSAGE_ROLE_UNSPECIFIED = 0;
   CHAT_COMPLETION_MESSAGE_ROLE_SYSTEM = 1;
@@ -35,13 +52,7 @@ message Message {
   string content = 2;
 }
 
-message StreamChatCompletionsRequest {
-  string model = 1;
-  string token = 2;
-  optional double temperature = 3;
-  optional double top_p = 4;
-  repeated Message messages = 5;
-}
+
 
 message SearchResult {
   string title = 1;
@@ -52,12 +63,69 @@ message SearchResult {
   string source = 6;
 }
 
-message StreamChatCompletionsResponse {
-  oneof content {
-    string reasoning_chunk = 1;
-    string message_chunk = 2;
-  }
-  // 元数据字段 - 每个 chunk 都可能包含
-  repeated string citations = 3;
-  repeated SearchResult search_results = 4;
+message ImageResult {
+  string url = 1;
+  optional string title = 2;
+  optional string source = 3;
 }
+
+// 推理步骤
+message ReasoningStep {
+  string thought = 1;
+  string type = 2;  // e.g., "web_search"
+  optional WebSearch web_search = 3;
+}
+
+message WebSearch {
+  repeated string search_keywords = 1;
+  repeated SearchResult search_results = 2;
+}
+
+// Token 使用信息
+message Usage {
+  optional int32 prompt_tokens = 1;  // API 返回的是 prompt_tokens
+  optional int32 completion_tokens = 2;  // API 返回的是 completion_tokens
+  optional int32 total_tokens = 3;  // API 直接返回
+  optional int32 search_context_size = 4;
+  optional double input_tokens_cost = 5;  // 来自 usage.cost
+  optional double output_tokens_cost = 6;  // 来自 usage.cost
+  optional double request_cost = 7;  // 来自 usage.cost.total_cost
+}
+
+// chat.reasoning chunk
+message ReasoningChunk {
+  string id = 1;
+  string model = 2;
+  int64 created = 3;
+  repeated ReasoningStep reasoning_steps = 4;  // 来自 delta
+}
+
+// chat.reasoning.done chunk
+message ReasoningDoneChunk {
+  string id = 1;
+  string model = 2;
+  int64 created = 3;
+  repeated ReasoningStep reasoning_steps = 4;  // 完整的推理步骤
+  repeated SearchResult search_results = 5;
+  repeated ImageResult images = 6;
+}
+
+// chat.completion.chunk chunk
+message CompletionChunk {
+  string id = 1;
+  string model = 2;
+  int64 created = 3;
+  optional string content = 4;  // 来自 delta.content
+}
+
+// chat.completion.done chunk
+message CompletionDoneChunk {
+  string id = 1;
+  string model = 2;
+  int64 created = 3;
+  optional string content = 4;  // 完整的聚合消息 choices[0].message.content
+  repeated SearchResult search_results = 5;
+  repeated ImageResult images = 6;
+  optional Usage usage = 7;
+}
+
