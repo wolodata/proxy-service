@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 // loadEnvFile 从 .env 文件加载环境变量
@@ -112,6 +114,21 @@ func TestClient_SonarModel(t *testing.T) {
 		chunkTypes[chunk.Object]++
 
 		t.Logf("收到 chunk #%d: type=%s, id=%s", chunkCount, chunk.Object, chunk.ID)
+
+		// 记录特定事件的完整内容
+		switch chunk.Object {
+		case "chat.reasoning":
+			t.Logf("=== chat.reasoning 完整内容 ===")
+			t.Log(spew.Sdump(chunk))
+
+		case "chat.reasoning.done":
+			t.Logf("=== chat.reasoning.done 完整内容 ===")
+			t.Log(spew.Sdump(chunk))
+
+		case "chat.completion.done":
+			t.Logf("=== chat.completion.done 完整内容 ===")
+			t.Log(spew.Sdump(chunk))
+		}
 	}
 
 	if err := stream.Err(); err != nil {
