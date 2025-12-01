@@ -124,8 +124,6 @@ message CompletionDoneChunk {
   string model = 2;
   int64 created = 3;
   optional string content = 4;  // 完整的聚合消息 choices[0].message.content
-  repeated SearchResult search_results = 5;
-  repeated ImageResult images = 6;
-  optional Usage usage = 7;
+  optional Usage usage = 5;
 }
 
