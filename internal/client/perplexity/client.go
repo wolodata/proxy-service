@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/wolodata/proxy-service/internal/ssestream"
@@ -76,8 +77,11 @@ func (c *Client) StreamChatCompletions(ctx context.Context, token string, req Ch
 
 	// 4. 检查状态码
 	if resp.StatusCode != http.StatusOK {
+		// 读取错误响应体
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("API 返回错误状态码: %d", resp.StatusCode)
+
+		return nil, fmt.Errorf("API 返回错误状态码 %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	// 5. 创建 SSE 流
